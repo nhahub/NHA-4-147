@@ -1,0 +1,111 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-svc
+  namespace: back-proj-ns
+  labels:
+    app : mern-back-svc
+spec:
+  ports:
+    - targetPort: 8000
+      port: 8000
+      nodePort: 30012
+  type: NodePort
+  selector:
+    app: ecommerce
+    type: back-end
+
+---
+ 
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+  name: back-deployment
+  namespace: back-proj-ns
+  labels:
+    app: ecommerce-back-deploy
+    
+
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ecommerce
+      type: back-end
+
+  template:
+    metadata:
+      name: back-ecommerce-pod
+      labels:
+        app: ecommerce
+        type: back-end
+
+    spec:
+      containers:
+      - name: back-ecommerce-container
+        image: abdulrahman011/devops_comprehensive_project_depi_back_svc
+        ports: 
+        - containerPort: 8000
+
+        env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: MONGO_URI
+
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: SECRET_KEY
+            - name: ORIGIN
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: ORIGIN
+            - name: EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: EMAIL
+
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: PASSWORD
+            
+            - name: LOGIN_TOKEN_EXPIRATION
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: LOGIN_TOKEN_EXPIRATION
+
+            - name: OTP_EXPIRATION_TIME
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: OTP_EXPIRATION_TIME
+
+            - name: PASSWORD_RESET_TOKEN_EXPIRATION
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: PASSWORD_RESET_TOKEN_EXPIRATION
+            - name: COOKIE_EXPIRATION_DAYS
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: COOKIE_EXPIRATION_DAYS
+            - name: PRODUCTION
+              valueFrom:
+                secretKeyRef:
+                  name: back-secret 
+                  key: PRODUCTION
+
+
+        

@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-svc-headless
+  namespace: mongodb-proj-ns
+  labels:
+    name: mongo-svc
+
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+
+  clusterIP: None ## headless service 
+
+  selector:
+    app: mongodb
+
+
+
+
+---
+
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-clusterip-svc
+  namespace: mongodb-proj-ns
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+
+
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: db-ss
+  namespace: mongodb-proj-ns
+
+spec:
+  selector:
+    matchLabels:
+      app: mongodb
+
+
+  serviceName: "mongo-svc-headless"
+  replicas: 2 
+  
+  template:
+
+    metadata:
+      labels:
+        app: mongodb
+
+    spec:
+        volumes:
+          - name: mongo-keyfile-secret
+            secret:
+               secretName: mongodb-secret
+               defaultMode: 0400
+               items:
+                - key: mongo-keyfile
+                  path: mongo-keyfile
+
+          - name: mongo-keyfile
+            emptyDir: {}
+
+        securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+
+
+
+## to solve problem of keyfile permission 
+        initContainers:
+        - name: keyfile-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              cp /tmp/mongo-keyfile-secret/mongo-keyfile /etc/mongo-keyfile/mongo-keyfile
+              chmod 400 /etc/mongo-keyfile/mongo-keyfile
+              chown 999:999 /etc/mongo-keyfile/mongo-keyfile
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+
+          volumeMounts:
+            - name: mongo-keyfile-secret
+              mountPath: /tmp/mongo-keyfile-secret
+              readOnly: true
+              
+            - name: mongo-keyfile
+              mountPath: /etc/mongo-keyfile
+
+
+
+        containers:
+        - name: mongodb-container
+
+          image: mongo:latest
+
+          ports:
+          - containerPort: 27017
+
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_INITDB_ROOT_PASSWORD
+
+            - name: MONGO_INITDB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_INITDB_DATABASE
+          args:
+            - "--replSet"
+            - "rs0"
+            - "--bind_ip_all" 
+            - "--keyFile"
+            - "/etc/mongo-keyfile/mongo-keyfile"
+
+
+              # resources:
+              # requests:
+              # cpu: 250m
+                # memory: 512Mi
+                # limits:
+              #           cpu: 1000m
+              # memory: 1Gi
+
+
+
+          
+          
+          volumeMounts:
+          - name: mongo-keyfile
+            mountPath: /etc/mongo-keyfile
+            readOnly: true
+
+          - name: db-data
+            mountPath: /data/db
+
+
+  volumeClaimTemplates: ## we have pvc for each pod 
+  - metadata:
+      name: db-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      # storageClassName: "my-storage-class"
+      resources:
+        requests:
+          storage: 1Gi

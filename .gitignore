@@ -1,0 +1,6 @@
+backend/.env
+frontend/.env
+.env
+k8s/back/back-secret.yaml
+
+

@@ -1,0 +1,67 @@
+services:
+  back_svc:
+    container_name: ecommerce_backend
+    restart: unless-stopped
+    build: ./backend/ # dockerfile path
+    depends_on:
+      - mongodb
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      MONGO_URI : ${MONGO_URI}
+      SECRET_KEY: ${SECRET_KEY}
+      ORIGIN: ${ORIGIN}
+      EMAIL: ${EMAIL}
+      PASSWORD: ${PASSWORD} ## app password 
+
+      LOGIN_TOKEN_EXPIRATION: "30d"  # Days
+      OTP_EXPIRATION_TIME: "120000"  # Milliseconds
+      PASSWORD_RESET_TOKEN_EXPIRATION: "2m"  # Minutes
+      COOKIE_EXPIRATION_DAYS: "30"    # Days
+
+      PRODUCTION: ${PRODUCTION}
+
+    networks:
+      - front_net
+      - back_net
+  front_svc:
+    container_name: ecommerce_front
+    restart: unless-stopped
+    build: ./frontend # frontend dockerfile
+    depends_on:
+      - back_svc
+    environment:
+      REACT_APP_BASE_URL: ${REACT_APP_BASE_URL}
+
+    ports:
+      - "3000:3000"
+    networks:
+      - front_net
+
+  mongodb:
+    container_name: ecommerce_db
+    restart: unless-stopped
+    image: mongo:latest
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+
+    networks:
+      - back_net
+    volumes:
+      - db_data:/data/db
+
+networks:
+  front_net:
+    driver: bridge
+
+  back_net:
+    driver: bridge
+
+
+volumes:
+  db_data:

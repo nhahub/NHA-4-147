@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-rs-init
+  namespace: mongodb-proj-ns
+
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      containers:
+      - name: mongo-init
+        image: mongo:7
+      
+        env:
+          - name: MONGO_INITDB_ROOT_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: MONGO_INITDB_ROOT_USERNAME
+          - name: MONGO_INITDB_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: MONGO_INITDB_ROOT_PASSWORD
+
+        command:
+        - /bin/sh
+        - -c
+        - |
+          sleep 30
+
+          mongosh db-ss-0.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017 -u "$MONGO_INITDB_ROOT_USERNAME" -p example "$MONGO_INITDB_ROOT_PASSWORD"  --authenticationDatabase admin --eval '
+          rs.initiate({
+            _id:"rs0",
+            members:[
+              {_id:0,host:"db-ss-0.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017"},
+              {_id:1,host:"db-ss-1.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017"}
+            ]
+          })
+          '

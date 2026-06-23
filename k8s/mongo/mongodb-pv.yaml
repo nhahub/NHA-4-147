@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pv-1
+  namespace: mongodb-proj-ns
+
+spec:
+  capacity:
+    storage: 2Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  hostPath:
+    path: /mnt/data/mongo-1
+    
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  namespace: mongodb-proj-ns
+  name: mongo-pv-2
+spec:
+  capacity:
+    storage: 2Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  hostPath:
+    path: /mnt/data/mongo-2
