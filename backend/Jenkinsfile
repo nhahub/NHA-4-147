@@ -1,0 +1,79 @@
+podTemplate(
+    containers: [
+        containerTemplate(name: 'node', image: 'node:18-alpine', command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'docker', image: 'docker:20.10-cli', command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'sonar-scanner', image: 'sonarsource/sonar-scanner-cli:latest', command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'trivy', image: 'aquasec/trivy:latest', command: 'cat', ttyEnabled: true)
+    ],
+    volumes: [ hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock') ]
+) {
+    node(POD_LABEL) {
+        
+        def DOCKER_REGISTRY = "yourdockerhubusername"
+        def IMAGE_NAME = "${DOCKER_REGISTRY}/nha-backend"
+        def IMAGE_TAG = "v${env.BUILD_NUMBER}"
+        def SONAR_HOST = "http://sonarqube.default.svc.cluster.local:9000"
+        def SONAR_KEY  = "nha-147-backend"
+
+        try {
+            stage('Checkout') { checkout scm }
+
+            stage('SonarQube Scan') {
+                container('sonar-scanner') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        sh """
+                        sonar-scanner \
+                          -Dsonar.projectKey=${SONAR_KEY} \
+                          -Dsonar.sources=./backend \
+                          -Dsonar.host.url=${SONAR_HOST} \
+                          -Dsonar.login=${SONAR_TOKEN}
+                        """
+                    }
+                }
+            }
+
+            stage('Build Image') {
+                container('docker') {
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ./backend"
+                }
+            }
+
+            stage('Trivy Scan') {
+                container('trivy') {
+                    sh "trivy image --exit-code 0 --severity HIGH ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "trivy image --exit-code 1 --severity CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
+                }
+            }
+
+            stage('Push Image') {
+                container('docker') {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                        sh """
+                        docker login -u ${USER} -p ${PASS}
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        """
+                    }
+                }
+            }
+
+            stage('Update K8s Manifest') {
+                container('node') {
+                    withCredentials([usernamePassword(credentialsId: 'github-creds', passwordVariable: 'GPASS', usernameVariable: 'GUSER')]) {
+                        sh """
+                        git config user.email "jenkins@domain.com" && git config user.name "Jenkins CI"
+                        
+                        # TARGETING YOUR EXACT BACKEND FILE:
+                        sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/back/back-deployment-svc.yaml
+                        
+                        git add k8s/back/back-deployment-svc.yaml
+                        git commit -m "ci(backend): update image to ${IMAGE_TAG} [skip ci]"
+                        git push https://${GUSER}:${GPASS}@github.com/nhahub/NHA-4-147.git HEAD:main
+                        """
+                    }
+                }
+            }
+        } finally {
+            stage('Cleanup') { cleanWs() }
+        }
+    }
+}
