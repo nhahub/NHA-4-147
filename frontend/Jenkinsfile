@@ -10,7 +10,7 @@ podTemplate(
     node(POD_LABEL) {
         
         // ==================== EDIT THIS LINE ONLY ====================
-        def DOCKER_REGISTRY = "aliabdelnasser" 
+        def DOCKER_REGISTRY = "meno0123" 
         // =============================================================
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/ecommerce"
