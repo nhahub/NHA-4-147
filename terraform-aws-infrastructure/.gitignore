@@ -1,9 +1,6 @@
 # Local .terraform directories
 .terraform/
 
-# Ignore the root main file
-main.tf
-
 
 # Terraform state files
 *.tfstate
