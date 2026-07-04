@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-back-svc
+  namespace: {{ .Values.back_ns | default "back-proj-ns"}}
+  labels:
+    app : {{ .Release.Name }}-svc-back-label
+spec:
+  ports:
+    - targetPort: 8000
+      port: {{ .Values.service.port }}
+      nodePort: {{ $.Values.global.back_nodeport }}
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "backend.labels" . | nindent 4 }}

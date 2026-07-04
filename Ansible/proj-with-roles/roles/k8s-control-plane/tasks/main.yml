@@ -1,0 +1,73 @@
+---
+# tasks file for k8s-control-plane
+
+- name: Check if cluster is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_init
+
+
+
+- name: Tasks for k8s master
+  block:
+  
+    - name: init cluster
+      ansible.builtin.command:
+        cmd: kubeadm init
+      register: init_output
+
+    - name: create .kube_dir for root
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0755'
+
+    - name: Copy a "admin.conf" file
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        owner: root
+        group: root
+        remote_src: yes
+        mode: '0600'
+
+    - name: Wait for API server to be ready
+      ansible.builtin.wait_for:
+        host: localhost
+        port: 6443
+        timeout: 120
+
+    - name: install CNI calico in cluster
+      ansible.builtin.command:
+        cmd: "kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml"
+
+    - name: Wait for control plane pods to be ready
+      ansible.builtin.command:
+        cmd: >
+          kubectl wait pod
+          --for=condition=Ready
+          --all
+          -n kube-system
+          --timeout=300s
+      changed_when: false
+
+
+  when:
+    - not kubeadm_init.stat.exists | default(false)
+
+  tags: k8s-master
+
+
+
+# Always runs ->  gives workers a fresh valid token
+- name: Generate worker join command
+  ansible.builtin.command:
+    cmd: kubeadm token create --print-join-command
+  register: join_command
+  changed_when: false
+
+- name: Save join command as host fact (accessible via hostvars)
+  ansible.builtin.set_fact:
+    k8s_join_command: "{{ join_command.stdout }}"
+
+

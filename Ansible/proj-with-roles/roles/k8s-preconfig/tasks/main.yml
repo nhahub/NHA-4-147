@@ -1,0 +1,71 @@
+---
+# tasks file for k8s-preconfig-to setup linux to be ready for k8s cluster
+
+
+
+- name: Set hostname on workers
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update /etc/hosts with all cluster nodes
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] }}  {{ item }}"
+    state: present
+  loop: "{{ groups['k8s_cluster'] }}"
+
+
+- name: Add worker hostname to its own /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "127.0.0.1  {{ inventory_hostname }}"
+    state: present
+  when: inventory_hostname in groups['k8s_workers']
+
+- name: Install Kernel Headers on Master Node
+  yum: 
+    name: "kernel-devel"
+    state: present
+    update_cache: true
+          
+          
+- name:  Load Kernel Modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop: "{{ loaded_kernel_modules }}"
+
+- name: Configure sysctl for Kubernetes networking
+  copy: 
+    src: ./sysctl_k8s_conf
+    dest: /etc/sysctl.d/kubernetes.conf
+  
+          
+- name: Apply sysctl settings immediately
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: false
+
+- name: Remove swap from fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '.*swap.*'
+    state: absent
+
+- name: Disable swap
+  shell: 
+    cmd: swapoff -a
+    
+
+# Configure Firewall and SELinux
+- name: disable Firewall
+  service:
+    name: firewalld
+    state: stopped
+    enabled: false
+
+- name: Put SELinux in permissive mode, logging actions that would be blocked.
+  ansible.posix.selinux:
+    policy: targeted
+    state: permissive

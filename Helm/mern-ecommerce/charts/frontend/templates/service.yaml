@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-front-svc
+  namespace: {{ .Values.front_ns | default "front-proj-ns"}}
+  labels:
+    app : {{ .Release.Name }}-svc-front-label
+spec:
+  ports:
+    - targetPort: 3000
+      port: {{ .Values.service.port }}
+      nodePort: {{ $.Values.global.front_nodeport | default "30030" }}
+  type: {{ .Values.service.type }}
+  selector:
+  {{- include "frontend.Labels" . | nindent 4 }}

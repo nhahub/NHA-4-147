@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-front-deployment
+  namespace: {{ .Values.front_ns | default "front-proj-ns" }}
+  labels:
+    app: {{ .Release.Name }}-front-deploy
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+    {{- include "frontend.Labels" . | nindent 6 }}
+  template:
+    metadata:
+      name: {{ .Release.Name }}-front-pod
+      labels:
+      {{- include "frontend.Labels" . | nindent 8 }}
+    
+    
+    spec:
+      # ----------------------------------------------------------------
+      # wait-for-backend: polls the backend's health endpoint over the
+      # cluster-internal SVC DNS name (pod-to-pod, NOT the NodePort).
+      # This is the one place where svc.cluster.local IS correct because
+      # the initContainer runs inside the cluster, not in the browser.
+      # ----------------------------------------------------------------
+      initContainers:
+      - name: wait-for-backend
+        image: busybox:1.36
+        command:
+          - /bin/sh
+          - -c
+          - |
+            BACKEND="http://{{ $.Values.global.nodeIP }}:{{ $.Values.global.back_nodeport }}/"
+            echo "Waiting for backend at $BACKEND..."
+            until wget -qO- "$BACKEND" >/dev/null 2>&1; do
+              echo "Backend not ready, retrying in 5s..."
+              sleep 5
+            done
+            echo "Backend is ready."
+
+      containers:
+      - name: {{ .Release.Name }}-front-container
+        image: {{  .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+            
+        ports: 
+        - containerPort: 3000
+
+        env:
+        - name: REACT_APP_BASE_URL
+          value: "http://{{ $.Values.global.nodeIP }}:{{ $.Values.global.back_nodeport }}"
+
+
+
+
+        

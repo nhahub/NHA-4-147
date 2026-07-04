@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+  name: {{ .Release.Name }}-back-deployment
+  namespace: {{ .Values.back_ns | default "back-proj-ns"}}
+  labels:
+    app: {{ .Release.Name }}-back-deploy
+    
+
+spec:
+  replicas: {{  .Values.replicaCount | default "1" }}
+  selector:
+    matchLabels:
+    {{- include "backend.labels" . | nindent 6 }}
+  template:
+    metadata:
+      name: {{ .Release.Name }}-back-pod
+      labels:
+      {{- include "backend.labels" . | nindent 8 }}
+
+    spec:
+      # ----------------------------------------------------------------
+      # wait-for-mongodb: polls db-ss-0 with ping until mongod is up
+      # and accepting connections. Prevents the Mongoose ENOTFOUND /
+      # buffering-timed-out crash on cold start.
+      # (See troubleshooting doc: mongodb-clusterip-vs-headless.docx)
+      # ----------------------------------------------------------------
+
+      initContainers:
+      - name: wait-for-mongodb
+        image: mongo:7
+        env:
+          - name: MONGO_INITDB_ROOT_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Release.Name }}-back-secret 
+                key: MONGO_INITDB_ROOT_USERNAME
+          - name: MONGO_INITDB_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Release.Name }}-back-secret  
+                key: MONGO_INITDB_ROOT_PASSWORD
+        command:
+            - /bin/sh
+            - -c
+            - |
+              MONGO_HOST="{{ .Release.Name }}-db-ss-0.{{ .Release.Name }}-mongo-svc-headless.{{ .Values.global.mongodb_ns | default "mongodb-proj-ns"}}.svc.cluster.local:27017"
+
+              echo "Waiting for MongoDB primary..."
+              until mongosh "$MONGO_HOST" \
+                -u "$MONGO_INITDB_ROOT_USERNAME" \
+                -p "$MONGO_INITDB_ROOT_PASSWORD" \
+                --authenticationDatabase admin \
+                --quiet \
+                --eval 'db.runCommand({isMaster:1}).ismaster' 2>/dev/null | grep -q "true"; do
+                echo "No primary yet, retrying in 5s..."
+                sleep 5
+              done
+              echo "MongoDB primary is ready."
+
+
+      containers:
+      - name: {{ .Release.Name }}-back-container
+        image: {{ .Values.image.repository }}
+        ports: 
+        - containerPort: 8000
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+
+        env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret 
+                  key: MONGO_URI
+
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret
+                  key: SECRET_KEY
+            - name: ORIGIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret 
+                  key: ORIGIN
+            - name: EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret
+                  key: EMAIL
+
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret
+                  key: PASSWORD
+            
+            - name: LOGIN_TOKEN_EXPIRATION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret
+                  key: LOGIN_TOKEN_EXPIRATION
+
+            - name: OTP_EXPIRATION_TIME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret
+                  key: OTP_EXPIRATION_TIME
+
+            - name: PASSWORD_RESET_TOKEN_EXPIRATION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret 
+                  key: PASSWORD_RESET_TOKEN_EXPIRATION
+            - name: COOKIE_EXPIRATION_DAYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret 
+                  key: COOKIE_EXPIRATION_DAYS
+            - name: PRODUCTION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-back-secret 
+                  key: PRODUCTION
+
+
+        

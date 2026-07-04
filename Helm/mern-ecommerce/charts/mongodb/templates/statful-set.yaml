@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: {{ .Release.Name }}-db-ss
+  namespace: {{ .Values.global.mongodb_ns | default .Values.mongodb_ns | default "mongodb-proj-ns"}}
+  labels:
+    name:  {{ .Release.Name }}-mongo-SS
+
+spec:
+  selector:
+    matchLabels:
+    {{- include "mongodb.labels" . | nindent 6 }}
+
+
+  serviceName: {{ .Release.Name }}-mongo-svc-headless
+  replicas: {{ .Values.replicaCount }}
+  
+  template:
+    metadata:
+      labels:
+      {{- include "mongodb.labels" . | nindent 8 }}
+
+    spec:
+        volumes:
+          - name: mongo-keyfile-secret
+            secret:
+              secretName: {{ .Release.Name }}-db-secret 
+              defaultMode: 0400
+              items:
+              - key: mongo-keyfile
+                path: mongo-keyfile
+
+          - name: mongo-keyfile
+            emptyDir: {}
+
+        securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+
+
+
+## to solve problem of keyfile permission 
+        initContainers:
+        - name: keyfile-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              cp /tmp/mongo-keyfile-secret/mongo-keyfile /etc/mongo-keyfile/mongo-keyfile
+              chmod 400 /etc/mongo-keyfile/mongo-keyfile
+              chown 999:999 /etc/mongo-keyfile/mongo-keyfile
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+
+          volumeMounts:
+            - name: mongo-keyfile-secret
+              mountPath: /tmp/mongo-keyfile-secret
+              readOnly: true
+              
+            - name: mongo-keyfile
+              mountPath: /etc/mongo-keyfile
+
+#  fixes hostPath PV ownership since fsGroup doesn't apply to hostPath volumes
+        - name: fix-data-permissions
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              rm -rf /data/db
+              mkdir -p /data/db
+              chown -R 999:999 /data/db
+              chmod -R 750 /data/db
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          volumeMounts:
+            - name: db-data
+              mountPath: /data/db
+
+        containers:
+        - name: mongodb-container
+
+          image: {{  .Values.image.repository }}
+
+          ports:
+          - containerPort: 27017
+
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-secret 
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-secret 
+                  key: MONGO_INITDB_ROOT_PASSWORD
+
+            - name: MONGO_INITDB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-secret 
+                  key: MONGO_INITDB_DATABASE
+          args:
+            - "--replSet"
+            - "rs0"
+            - "--bind_ip_all" 
+            - "--keyFile"
+            - "/etc/mongo-keyfile/mongo-keyfile"
+
+
+           
+
+
+
+          
+          
+          volumeMounts:
+          - name: mongo-keyfile
+            mountPath: /etc/mongo-keyfile
+            readOnly: true
+
+          - name: db-data
+            mountPath: /data/db
+
+
+  volumeClaimTemplates: ## we have pvc for each pod 
+  - metadata:
+      name: db-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      # storageClassName: "my-storage-class"
+      resources:
+        requests:
+          storage: 1Gi

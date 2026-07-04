@@ -1,0 +1,38 @@
+---
+# tasks file for k8s-packges
+# Install kubelet, kubeadm, kubectl, conntrack on all nodes
+
+
+- name: copy / create k8s yum repo
+  copy:
+    src: kubernetes.repo
+    dest: /etc/yum.repos.d/kubernetes.repo
+
+- name: Update DNF metadata cache
+  ansible.builtin.command:
+    cmd: dnf makecache
+  changed_when: false
+
+- name: Install kubeadm & kubectl & kubelet
+  yum:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    disable_excludes: "kubernetes"
+    update_cache: true
+
+- name: enable kubelet service
+  service:
+    name: kubelet.service
+    state: started
+    enabled: true
+
+- name: Install conntrack
+  yum:
+    name: conntrack
+    state: present
+    update_cache: true
+  when: inventory_hostname in groups['k8s_cluster']
+  tags: k8s-master-worker-componetnent

@@ -1,0 +1,74 @@
+# Default values for mern-ecommerce . PARENT CHART 
+
+global:
+  nodeIP: "192.168.163.144"
+  back_nodeport: 30021
+  front_nodeport: 30020
+  mongodb_ns: mongodb-proj-ns
+  back_ns: back-proj-ns
+
+
+# override values for subcharts 
+
+mongodb:
+  mongodb_ns : mongodb-proj-ns
+
+  replicaCount: 2
+
+  image:
+    repository: mongo
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+
+
+
+  service:
+    type: ClusterIP
+    port: 27017
+
+
+
+backend:
+  replicaCount: 1
+  back_ns: back-proj-ns
+
+  image:
+    repository: abdulrahman011/devops_comprehensive_project_depi_back_svc
+    pullPolicy: IfNotPresent
+    tag: ""
+
+
+
+  service:
+    type: NodePort
+    port: 8000
+
+
+
+
+frontend:
+  front_ns: front-proj-ns
+
+  replicaCount: 1
+
+  image:
+    repository: abdulrahman011/devops_comprehensive_project_depi_front_svc
+    pullPolicy: IfNotPresent
+    tag: ""
+
+
+
+  env_url:
+    name: REACT_APP_BASE_URL
+    value: "http://192.168.163.136"
+
+
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30020
+

@@ -1,0 +1,140 @@
+---
+# tasks file for k8s-helm-argocd-monitoring_STACK
+
+
+# install and setup helm 
+- name: Check if helm is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/helm
+  register: helm_binary 
+
+- name: install helm
+  block: 
+  - name: Create helm  directory
+    ansible.builtin.file:
+      path: /opt/helm
+      state: directory
+      mode: '0755'
+
+  - name: install git 
+    yum: 
+      name: git
+      state: present
+      update_cache: true
+
+
+  - name: get helm bash script 
+    ansible.builtin.get_url:
+      url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+      dest: /opt/helm/get_helm.sh
+      mode: '0744'
+
+
+  - name: run script setup helm 
+    command: /opt/helm/get_helm.sh
+    environment:
+      PATH: "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin" ## as /usr/local/bin not in PATH
+    register: helm_out
+
+  - name : show output for helm install
+    debug: 
+      var: helm_out
+
+
+  when: not helm_binary.stat.exists 
+  tags: install helm binary 
+
+
+## install argocd  with manifests and ignore errors if ns is already exists 
+
+- name: create namespace for argocd
+  ansible.builtin.command:
+    cmd: kubectl create namespace argocd
+  register: ns_result
+  failed_when:
+    - ns_result.rc != 0
+    - '"already exists" not in ns_result.stderr'
+  changed_when: ns_result.rc == 0
+
+
+- name: apply the manifests 
+  command: kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# - name: Pause for 1 minutes 
+#   ansible.builtin.pause:
+#     minutes: 1
+
+- name: Wait for argocd-server to be ready
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/argocd-server -n argocd --timeout=300s
+  changed_when: false
+  
+
+# - name: copy ingress 
+#   copy: 
+#     src:  ingress-argocd.yaml
+#     dest: /root/ingress-argocd.yaml
+
+
+# - name: apply the ingress
+#   command: kubectl apply  -n argocd  -f /root/ingress-argocd.yaml  
+
+# - name: apply port-forward  ## not best option as this will need to run command for ever 
+#   command: kubectl port-forward svc/argocd-server -n argocd 8080:443 
+
+- name: Patch argocd-server service to NodePort
+  ansible.builtin.command:
+    cmd: >
+      kubectl patch svc argocd-server
+      -n argocd
+      -p '{"spec":{"type":"NodePort","ports":[{"port":443,"targetPort":8080,"nodePort":30180}]}}'
+  changed_when: false
+
+- name: Get node IP
+  ansible.builtin.shell:
+    cmd: kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}'
+  register: node_ip
+  changed_when: false
+
+
+
+## command module not support pipe in commands 
+- name: get the pass of admin 
+  shell:
+    cmd: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d 
+  register: output_for_admin_pass
+
+- name: Display argocd access info
+  ansible.builtin.debug:
+    msg:
+      - "ArgoCD URL:  http://{{ node_ip.stdout }}:30180"
+      - "Username:    admin"
+      - "Password:    {{ output_for_admin_pass.stdout }}"
+
+
+
+
+
+# ## install argocd  with helm 
+# - name: add the repo 
+#   command: /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm  && /usr/local/bin/helm repo update
+
+
+
+# - name: create the valus.yaml file to edit it  
+#   command: /usr/local/bin/helm show values argo/argo-cd > /root/argocd-ansible/values.yaml
+
+# - name: change the service type from clusterip to NodePort 
+#   lineinfile:
+#     path: /root/argocd-ansible/values.yaml
+#     regexp: '(\s+)type: clusterIP'
+#     line: '\1type: NodePort'
+#     backrefs: yes
+
+# - name: apply the chart 
+#   command: /usr/local/bin/helm install -f values.yaml argocd argo/argo-cd -n argocd --create-namespace 
+#   register: helm-argocd-output
+
+# - name: debug helm-argocd-output
+#   debug:
+#     var: helm-argocd-output

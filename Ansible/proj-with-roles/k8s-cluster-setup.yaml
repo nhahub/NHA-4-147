@@ -1,0 +1,70 @@
+
+
+#  Kubernetes Cluster Setup
+
+#  command :  ansible-playbook -i inventory.ini k8s-cluster-setup.yaml
+
+
+# play 1: Linux pre-config on ALL nodes 
+- name: play 1 - Common Linux configuration
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - k8s-preconfig
+
+# play 2: Install containerd on ALL nodes 
+- name: play 2 - Install and configure containerd
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - k8s-containerd     
+
+# play 3: Install k8s packages on ALL nodes 
+- name: play 3 - Install Kubernetes packages
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - k8s-packges 
+
+# play 4: Initialize control plane 
+- name: play 4 - Initialize Kubernetes control plane
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - k8s-control-plane
+
+# play 5: Join workers
+- name: play 5 - Join worker nodes
+  hosts: k8s_workers
+  become: true
+  roles:
+    - k8s-workers
+
+# play 6: Verify cluster
+- name: play 6 - Verify cluster health
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - k8s-verification
+
+# play 7: SETup helm argocd  stack 
+- name: play 7 - SETup helm argocd stack
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - helm-argocd
+
+# play 8: SETup monitoring stack
+- name: play 8 - SETup monitoring stack
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - prom-stack
+
+
+# play 9: SETup SonarQube
+- name: play 8 - SETup SonarQube stack
+  hosts: sonar
+  become: true
+  roles:
+    - sonar

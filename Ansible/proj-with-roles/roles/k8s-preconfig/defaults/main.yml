@@ -1,0 +1,10 @@
+---
+# defaults file for k8s-preconfig
+
+loaded_kernel_modules:
+  - br_netfilter
+  - ip_vs
+  - ip_vs_rr
+  - ip_vs_wrr
+  - ip_vs_sh
+  - overlay
