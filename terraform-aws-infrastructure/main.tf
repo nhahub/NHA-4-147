@@ -42,7 +42,8 @@ resource "tls_private_key" "rsa_private_key" {
 # Save the private key to a local file
 resource "local_file" "private_key_file" {
   content  = tls_private_key.rsa_private_key.private_key_pem
-  filename = "${path.root}/private_key.pem"
+  filename = "${path.root}/generated/private_key.pem"
+  file_permission = "0400"
 }
 
 # Create an AWS Key Pair using the generated public key
@@ -61,6 +62,7 @@ module "k8s_master" {
   key_name          = aws_key_pair.public_key_pair.key_name
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-master"
+  instance_role     = "k8s_control_plane"
 }
 
 
@@ -73,6 +75,7 @@ module "k8s_worker01" {
   key_name          = aws_key_pair.public_key_pair.key_name
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-worker01"
+  instance_role     = "k8s_workers"
 }
 
 module "k8s_worker02" {
@@ -84,6 +87,7 @@ module "k8s_worker02" {
   key_name          = aws_key_pair.public_key_pair.key_name
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-worker02"
+  instance_role     = "k8s_workers"
 }
 
 module "sonarqube" {
@@ -95,4 +99,5 @@ module "sonarqube" {
   key_name          = aws_key_pair.public_key_pair.key_name
   volume_size       = var.ec2_volume_size
   instance_name     = "sonarqube"
+  instance_role     = "sonar"
 }

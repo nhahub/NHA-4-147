@@ -1,34 +1,19 @@
 plugin: amazon.aws.aws_ec2
 
-# The access key for your AWS account.
-aws_access_key: <YOUR-AWS-ACCESS-KEY-HERE>
-# The secret access key for your AWS account.
-aws_secret_key: <YOUR-AWS-SECRET-KEY-HERE>
-
-
 regions:
   - us-east-1
 
-
-# Filter instances that are running 
 filters:
-  instance-state-name:  'running' 
+  instance-state-name: running
 
-# Automatically group hosts by their AWS tags  -> we need these group to be in the playbook ? see how 
 keyed_groups:
   - key: tags.Role
     prefix: ""
-
-  - key: tags.App
-    prefix: ""
-
 
 groups:
   k8s_cluster: >
     tags.Role == 'k8s_control_plane'
     or tags.Role == 'k8s_workers'
 
-
-# Property Ansible should use to connect ->  public IP
 hostnames:
   - ip-address

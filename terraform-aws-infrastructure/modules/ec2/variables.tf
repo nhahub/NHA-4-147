@@ -5,3 +5,4 @@ variable "security_group_id" {}
 variable "key_name" {}
 variable "volume_size" {}
 variable "instance_name" {}
+variable "instance_role" {}
