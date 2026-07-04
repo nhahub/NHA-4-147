@@ -53,9 +53,21 @@ resource "aws_key_pair" "public_key_pair" {
 }
 
 
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}
+
+
+
 module "k8s_master" {
   source            = "./modules/ec2"
-  ami_id            = var.ec2_ami_id
+  ami_id            = data.aws_ami.amazon_linux.id
   instance_type     = var.ec2_instance_type
   subnet_id         = module.subnet.subnet_id
   security_group_id = module.security_group.security_group_id
@@ -63,12 +75,13 @@ module "k8s_master" {
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-master"
   instance_role     = "k8s_control_plane"
+  user_data         = file("${path.root}/scripts/install_python.sh")
 }
 
 
 module "k8s_worker01" {
   source            = "./modules/ec2"
-  ami_id            = var.ec2_ami_id
+  ami_id            = data.aws_ami.amazon_linux.id
   instance_type     = var.ec2_instance_type
   subnet_id         = module.subnet.subnet_id
   security_group_id = module.security_group.security_group_id
@@ -76,11 +89,12 @@ module "k8s_worker01" {
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-worker01"
   instance_role     = "k8s_workers"
+  user_data         = file("${path.root}/scripts/install_python.sh")
 }
 
 module "k8s_worker02" {
   source            = "./modules/ec2"
-  ami_id            = var.ec2_ami_id
+  ami_id            = data.aws_ami.amazon_linux.id
   instance_type     = var.ec2_instance_type
   subnet_id         = module.subnet.subnet_id
   security_group_id = module.security_group.security_group_id
@@ -88,11 +102,12 @@ module "k8s_worker02" {
   volume_size       = var.ec2_volume_size
   instance_name     = "k8s-worker02"
   instance_role     = "k8s_workers"
+  user_data         = file("${path.root}/scripts/install_python.sh")
 }
 
 module "sonarqube" {
   source            = "./modules/ec2"
-  ami_id            = var.ec2_ami_id
+  ami_id            = data.aws_ami.amazon_linux.id
   instance_type     = var.ec2_instance_type
   subnet_id         = module.subnet.subnet_id
   security_group_id = module.security_group.security_group_id
@@ -100,4 +115,5 @@ module "sonarqube" {
   volume_size       = var.ec2_volume_size
   instance_name     = "sonarqube"
   instance_role     = "sonar"
+  user_data         = file("${path.root}/scripts/install_python.sh")
 }

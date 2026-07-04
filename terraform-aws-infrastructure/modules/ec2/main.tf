@@ -6,6 +6,8 @@ resource "aws_instance" "this" {
   key_name      = var.key_name
   associate_public_ip_address = true
 
+  user_data = var.user_data
+
   root_block_device {
     volume_size = var.volume_size
     volume_type = "gp3"

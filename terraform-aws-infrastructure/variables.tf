@@ -61,8 +61,14 @@ variable "security_group_description" {
 variable "ec2_ami_id" {
   type        = string
   description = "AMI ID to use for launching the EC2 instance"
-  default     = "ami-********"
 }
+
+
+variable "user_data" {
+  type    = string
+  default = null
+}
+
 
 variable "ec2_instance_type" {
   type        = string
