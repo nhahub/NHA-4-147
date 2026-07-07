@@ -61,9 +61,13 @@
 # Configure Firewall and SELinux
 - name: disable Firewall
   service:
-    name: firewalld
+    name: "{{ item }}"
     state: stopped
     enabled: false
+  loop:
+    - firewalld
+    - ufw
+  failed_when: false
 
 - name: Put SELinux in permissive mode, logging actions that would be blocked.
   ansible.posix.selinux:

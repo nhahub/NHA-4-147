@@ -17,7 +17,7 @@
   hosts: k8s_cluster
   become: true
   roles:
-    - k8s-containerd     
+    - k8s-containerd-docker    
 
 # play 3: Install k8s packages on ALL nodes 
 - name: play 3 - Install Kubernetes packages

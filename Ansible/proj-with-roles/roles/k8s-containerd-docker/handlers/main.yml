@@ -1,0 +1,11 @@
+# handlers file for k8s-containerd-docker
+---
+- name: restart containerd
+  ansible.builtin.service:
+    name: containerd
+    state: restarted
+
+- name: restart docker
+  ansible.builtin.service:
+    name: docker
+    state: restarted

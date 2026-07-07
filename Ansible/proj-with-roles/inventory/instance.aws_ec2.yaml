@@ -9,6 +9,7 @@ filters:
 keyed_groups:
   - key: tags.Role
     prefix: ""
+    postfix: ""
 
 groups:
   k8s_cluster: >

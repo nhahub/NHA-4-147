@@ -61,6 +61,7 @@ variable "security_group_description" {
 variable "ec2_ami_id" {
   type        = string
   description = "AMI ID to use for launching the EC2 instance"
+  default = null
 }
 
 
@@ -73,12 +74,13 @@ variable "user_data" {
 variable "ec2_instance_type" {
   type        = string
   description = "EC2 instance type (e.g., t2.micro)"
-  default     = "t2.micro"
+  default     = "c7i-flex.large"
 }
 
 variable "ec2_key_name" {
   type        = string
   description = "Name of the existing EC2 key pair to use for SSH access"
+  default = null
 }
 
 variable "ec2_volume_size" {

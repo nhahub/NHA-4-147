@@ -1,0 +1,91 @@
+---
+# tasks file for k8s-containerd
+
+
+
+
+
+
+
+- name: Add Docker repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: '0644'
+
+- name: Install Docker CE and containerd packages
+  ansible.builtin.yum:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+
+
+
+# configure cotainerd 
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: create config file
+  shell:
+    cmd: "containerd config default > /etc/containerd/config.toml"
+
+- name: Enable SystemdCgroup in containerd
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '(\s+)SystemdCgroup = false'
+    line: '\1SystemdCgroup = true'
+    backrefs: yes
+
+- name: enable containerd service
+  service:
+    name: containerd.service
+    state: started
+    enabled: true
+
+# Configure Docker 
+- name: Enable and start Docker service
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create docker group
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+
+# newgrp docker is interactive — reset SSH connection instead
+- name: Reset SSH connection to apply group membership
+  ansible.builtin.meta: reset_connection
+
+
+# verify versions -> no conflicts 
+
+
+- name: Get Docker version
+  ansible.builtin.command:
+    cmd: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Get containerd version
+  ansible.builtin.command:
+    cmd: containerd --version
+  register: containerd_version
+  changed_when: false
+
+- name: Show installed versions
+  ansible.builtin.debug:
+    msg:
+      - "{{ containerd_version.stdout }}"
+      - "{{ docker_version.stdout }}"
+      - "User '{{ ansible_user }}' added to docker group"
