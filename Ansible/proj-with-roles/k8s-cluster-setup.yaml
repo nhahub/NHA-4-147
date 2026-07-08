@@ -54,13 +54,6 @@
   roles:
     - helm-argocd
 
-# play 8: SETup monitoring stack
-- name: play 8 - SETup monitoring stack
-  hosts: k8s_control_plane
-  become: true
-  roles:
-    - prom-stack
-
 
 # play 9: SETup SonarQube
 - name: play 8 - SETup SonarQube stack
@@ -68,3 +61,65 @@
   become: true
   roles:
     - sonar
+
+# MONITORING STACK 
+
+
+#  Phase 1: Node Exporter on all monitored nodes 
+- name: Install Node Exporter on all nodes
+  hosts: monitored
+  become: true
+  roles:
+    - prometheus.prometheus.node_exporter
+
+#  Phase 2: Prometheus + Alertmanager on monitoring server 
+- name: Install Prometheus
+  hosts: monitoring
+  become: true
+  roles:
+    - prometheus.prometheus.prometheus
+
+- name: Install Alertmanager
+  hosts: monitoring
+  become: true
+  roles:
+    - prometheus.prometheus.alertmanager
+
+#  Phase 3: Grafana on monitoring server 
+- name: Install Grafana
+  hosts: monitoring
+  become: true
+  roles:
+    - grafana.grafana.grafana
+
+#  Phase 4: Loki on monitoring server 
+- name: Install Loki
+  hosts: monitoring
+  become: true
+  pre_tasks:
+    - name: Download Loki RPM to /tmp directly
+      ansible.builtin.get_url:
+        url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-{{ loki_version }}.x86_64.rpm"
+        dest: "/tmp/loki-{{ loki_version }}.x86_64.rpm"
+        mode: '0644'
+  vars:
+    loki_version: "3.5.8"    # ← correct latest version
+    loki_download_url_rpm: "/tmp/loki-{{ loki_version }}.x86_64.rpm"
+  roles:
+    - grafana.grafana.loki
+
+#  Phase 5: Promtail on all nodes (log shipper → Loki) 
+- name: Install Promtail on all nodes
+  hosts: monitored
+  become: true
+  pre_tasks:
+    - name: Download Promtail RPM to /tmp directly
+      ansible.builtin.get_url:
+        url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-{{ promtail_version }}.x86_64.rpm"
+        dest: "/tmp/promtail-{{ promtail_version }}.x86_64.rpm"
+        mode: '0644'
+  vars:
+    promtail_version: "3.5.8"
+    promtail_download_url_rpm: "/tmp/promtail-{{ promtail_version }}.x86_64.rpm"
+  roles:
+    - grafana.grafana.promtail
