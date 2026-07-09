@@ -20,7 +20,7 @@
     path: /etc/hosts
     line: "127.0.0.1  {{ inventory_hostname }}"
     state: present
-  when: inventory_hostname in groups['k8s_workers']
+  when: tags.Role is defined and tags.Role == 'k8s_workers'
 
 - name: Install Kernel Headers on Master Node
   yum: 

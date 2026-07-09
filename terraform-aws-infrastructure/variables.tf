@@ -86,7 +86,7 @@ variable "ec2_key_name" {
 variable "ec2_volume_size" {
   type        = number
   description = "Size of the EBS volume in GB for the EC2 instance"
-  default     = 8
+  default     = 30
 }
 
 variable "ec2_instance_name" {

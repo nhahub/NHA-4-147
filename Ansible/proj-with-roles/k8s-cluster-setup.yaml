@@ -1,8 +1,7 @@
-
-
 #  Kubernetes Cluster Setup
-
 #  command :  ansible-playbook -i inventory.ini k8s-cluster-setup.yaml
+
+
 
 
 # play 1: Linux pre-config on ALL nodes 
@@ -13,7 +12,7 @@
     - k8s-preconfig
 
 # play 2: Install containerd on ALL nodes 
-- name: play 2 - Install and configure containerd
+- name: play 2 - Install and configure containerd and docker 
   hosts: k8s_cluster
   become: true
   roles:
@@ -53,6 +52,13 @@
   become: true
   roles:
     - helm-argocd
+
+# play 8: SETup monitoring stack
+- name: play 8 - SETup monitoring stack
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - prom-stack
 
 
 # play 9: SETup SonarQube

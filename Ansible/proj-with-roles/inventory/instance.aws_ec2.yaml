@@ -6,12 +6,11 @@ regions:
 filters:
   instance-state-name: running
 
-keyed_groups:
-  - key: tags.Role
-    prefix: ""
-    postfix: ""
 
 groups:
+  k8s_control_plane: tags.Role == 'k8s_control_plane'
+  k8s_workers: tags.Role == 'k8s_workers'
+  sonar: tags.Role == 'sonar'
   k8s_cluster: >
     tags.Role == 'k8s_control_plane'
     or tags.Role == 'k8s_workers'
