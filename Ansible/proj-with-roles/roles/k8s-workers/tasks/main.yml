@@ -13,6 +13,13 @@
       ansible.builtin.command:
         cmd: "{{ hostvars[groups['k8s_control_plane'][0]].k8s_join_command }}"
 
+    - name: Debug hostname values
+      ansible.builtin.debug:
+        msg:
+          - "inventory_hostname = {{ inventory_hostname }}"
+          - "ansible_hostname = {{ ansible_hostname | default('UNDEFINED') }}"
+          - "hostname fact = {{ ansible_facts.hostname | default('UNDEFINED') }}"
+
     - name: Wait for node to be ready
       ansible.builtin.command:
         cmd: "kubectl get node {{ ansible_hostname }} -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'"

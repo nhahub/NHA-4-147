@@ -1,25 +1,9 @@
 ---
-<<<<<<< HEAD
-# tasks file for k8s-containerd
-
-
-
-- name: Add Docker repository
-  ansible.builtin.get_url:
-    url: https://download.docker.com/linux/centos/docker-ce.repo
-    dest: /etc/yum.repos.d/docker-ce.repo
-    mode: '0644'
-
-- name: Install Docker CE and containerd packages
-  ansible.builtin.yum:
-    name: "{{ docker_packages }}"
-=======
 - name: Install containerd and docker on Amazon Linux 2023
   ansible.builtin.dnf:
     name:
       - containerd
       - docker
->>>>>>> 6aa004daad720239dfa4bfb6881fbfe31f09ad09
     state: present
     update_cache: true
 
