@@ -44,6 +44,8 @@ alertmanager:
     type: NodePort
     nodePort: {{ alertmanager_nodeport }}
  
+
+
 #  Node Exporter  # deploys on every node automatically via DaemonSet
 nodeExporter:
   enabled: true
@@ -54,6 +56,36 @@ nodeExporter:
     - key: node-role.kubernetes.io/master    # older k8s versions
       operator: Exists
       effect: NoSchedule
+
+  # Fix for AWS — get the PRIVATE IP from the node, not 0.0.0.0
+  env:
+    - name: HOST_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP   # ← resolves to private IP e.g. 10.0.x.x
+
+ livenessProbe:
+    httpGet:
+      host: 127.0.0.1     #  use localhost instead of pod IP (public IP on AWS)
+      path: /
+      port: 9100
+      scheme: HTTP
+    initialDelaySeconds: 0
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      host: 127.0.0.1     #  same fix
+      path: /
+      port: 9100
+      scheme: HTTP
+    initialDelaySeconds: 0
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 3
+
 
 #  kube-state-metrics 
 kubeStateMetrics:
