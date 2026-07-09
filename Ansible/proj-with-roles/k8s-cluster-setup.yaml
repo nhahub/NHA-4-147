@@ -1,8 +1,6 @@
-
-
 #  Kubernetes Cluster Setup
-
 #  command :  ansible-playbook -i inventory.ini k8s-cluster-setup.yaml
+
 
 
 # play 1: Linux pre-config on ALL nodes 
@@ -13,7 +11,7 @@
     - k8s-preconfig
 
 # play 2: Install containerd on ALL nodes 
-- name: play 2 - Install and configure containerd
+- name: play 2 - Install and configure containerd and docker 
   hosts: k8s_cluster
   become: true
   roles:
@@ -54,6 +52,41 @@
   roles:
     - helm-argocd
 
+# play 8: SETup monitoring stack  WITH HELM
+- name: play 8 - Setup monitoring stack with Helm
+  hosts: k8s_control_plane
+  become: true
+  environment:
+    PATH: "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  pre_tasks:
+    - name: Install required Python libraries for kubernetes.core
+      ansible.builtin.yum:
+        name:
+          - python3-pip
+          - python3-yaml        # ← fixes "No module named yaml"
+        state: present
+
+    - name: Install PyYAML via pip (if yum package not available)
+      ansible.builtin.pip:
+        name:
+          - pyyaml
+          - kubernetes          # also needed by kubernetes.core modules
+        state: present
+        executable: pip3
+        
+    - name: Verify helm is reachable
+      ansible.builtin.command:
+        cmd: helm version
+      changed_when: false
+      register: helm_check
+
+    - name: Show helm version
+      ansible.builtin.debug:
+        msg: "{{ helm_check.stdout }}"
+
+  roles:
+    - prom-stack
+
 
 # play 9: SETup SonarQube
 - name: play 8 - SETup SonarQube stack
@@ -61,65 +94,3 @@
   become: true
   roles:
     - sonar
-
-# MONITORING STACK 
-
-
-#  Phase 1: Node Exporter on all monitored nodes 
-- name: Install Node Exporter on all nodes
-  hosts: monitored
-  become: true
-  roles:
-    - prometheus.prometheus.node_exporter
-
-#  Phase 2: Prometheus + Alertmanager on monitoring server 
-- name: Install Prometheus
-  hosts: monitoring
-  become: true
-  roles:
-    - prometheus.prometheus.prometheus
-
-- name: Install Alertmanager
-  hosts: monitoring
-  become: true
-  roles:
-    - prometheus.prometheus.alertmanager
-
-#  Phase 3: Grafana on monitoring server 
-- name: Install Grafana
-  hosts: monitoring
-  become: true
-  roles:
-    - grafana.grafana.grafana
-
-#  Phase 4: Loki on monitoring server 
-- name: Install Loki
-  hosts: monitoring
-  become: true
-  pre_tasks:
-    - name: Download Loki RPM to /tmp directly
-      ansible.builtin.get_url:
-        url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-{{ loki_version }}.x86_64.rpm"
-        dest: "/tmp/loki-{{ loki_version }}.x86_64.rpm"
-        mode: '0644'
-  vars:
-    loki_version: "3.5.8"    # ← correct latest version
-    loki_download_url_rpm: "/tmp/loki-{{ loki_version }}.x86_64.rpm"
-  roles:
-    - grafana.grafana.loki
-
-#  Phase 5: Promtail on all nodes (log shipper → Loki) 
-- name: Install Promtail on all nodes
-  hosts: monitored
-  become: true
-  pre_tasks:
-    - name: Download Promtail RPM to /tmp directly
-      ansible.builtin.get_url:
-        url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-{{ promtail_version }}.x86_64.rpm"
-        dest: "/tmp/promtail-{{ promtail_version }}.x86_64.rpm"
-        mode: '0644'
-  vars:
-    promtail_version: "3.5.8"
-    promtail_download_url_rpm: "/tmp/promtail-{{ promtail_version }}.x86_64.rpm"
-  roles:
-    - grafana.grafana.promtail

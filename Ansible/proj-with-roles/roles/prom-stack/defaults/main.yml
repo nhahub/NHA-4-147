@@ -1,2 +1,30 @@
----
+
 # defaults file for Ansible/proj-with-roles/roles/prom-stack
+---
+
+#  Namespace 
+monitoring_namespace: monitoring
+
+#  kube-prometheus-stack 
+prometheus_stack_chart_version: "69.3.2"
+prometheus_stack_release_name: kube-prometheus-stack
+prometheus_stack_repo_url: https://prometheus-community.github.io/helm-charts
+
+# NodePort for external access
+prometheus_nodeport: 30090
+grafana_nodeport: 30300
+alertmanager_nodeport: 30093
+
+# Grafana admin credentials
+grafana_admin_user: admin
+grafana_admin_password: "admin123"
+
+# Storage retention
+prometheus_retention: "15d"
+
+#  Loki stack 
+loki_stack_chart_version: "2.10.2"
+loki_stack_release_name: loki-stack
+loki_stack_repo_url: https://grafana.github.io/helm-charts
+
+loki_nodeport: 30100

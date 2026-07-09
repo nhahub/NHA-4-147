@@ -1,0 +1,49 @@
+---
+
+- name: Add grafana Helm repo
+  kubernetes.core.helm_repository:
+    name: grafana
+    repo_url: "{{ loki_stack_repo_url }}"
+
+- name: Update Helm repos
+  ansible.builtin.command:
+    cmd: helm repo update
+  changed_when: false
+
+- name: Render loki-stack values from template
+  ansible.builtin.template:
+    src: loki-stack-values.yaml.j2
+    dest: /tmp/loki-stack-values.yaml
+    mode: '0644'
+
+- name: Deploy loki-stack via Helm
+  kubernetes.core.helm:
+    name: "{{ loki_stack_release_name }}"
+    chart_ref: grafana/loki-stack
+    chart_version: "{{ loki_stack_chart_version }}"
+    release_namespace: "{{ monitoring_namespace }}"
+    create_namespace: false
+    values_files:
+      - /tmp/loki-stack-values.yaml
+    wait: false
+
+- name: Wait for Loki pods to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait pod
+      --for=condition=Ready
+      --all
+      -n {{ monitoring_namespace }}
+      --timeout=300s
+  changed_when: false
+  retries: 3
+  delay: 30
+  register: wait_result
+  until: wait_result.rc == 0
+
+- name: Display Loki access info
+  ansible.builtin.debug:
+    msg:
+      - "Loki: http://{{ ansible_facts['default_ipv4']['address'] }}:{{ loki_nodeport }}"
+      - "Promtail: running as DaemonSet on all nodes"
+      - "Loki is pre-configured as datasource in Grafana"

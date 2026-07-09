@@ -1,2 +1,11 @@
 ---
 # tasks file for Ansible/proj-with-roles/roles/prom-stack
+
+
+- name: Deploy kube-prometheus-stack
+  ansible.builtin.include_tasks: prometheus_stack.yaml
+  tags: prometheus
+
+- name: Deploy Loki + Promtail
+  ansible.builtin.include_tasks: loki_stack.yaml
+  tags: loki

@@ -1,0 +1,60 @@
+# kube-prometheus-stack values  managed by Ansible
+
+#  Grafana 
+grafana:
+  enabled: true
+  adminUser: "{{ grafana_admin_user }}"
+  adminPassword: "{{ grafana_admin_password }}"
+
+  service:
+    type: NodePort
+    nodePort: {{ grafana_nodeport }}
+
+  # Pre-configure Loki as a datasource
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-stack.{{ monitoring_namespace }}.svc.cluster.local:3100
+      access: proxy
+
+  # Persist dashboards across restarts
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: utc
+
+#  Prometheus 
+prometheus:
+  enabled: true
+
+  service:
+    type: NodePort
+    nodePort: {{ prometheus_nodeport }}
+
+  prometheusSpec:
+    retention: "{{ prometheus_retention }}"
+
+    # Scrape all ServiceMonitors across all namespaces
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+#  Alertmanager 
+alertmanager:
+  enabled: true
+
+  service:
+    type: NodePort
+    nodePort: {{ alertmanager_nodeport }}
+ 
+#  Node Exporter  # deploys on every node automatically via DaemonSet
+nodeExporter:
+  enabled: true
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master    # older k8s versions
+      operator: Exists
+      effect: NoSchedule
+
+#  kube-state-metrics 
+kubeStateMetrics:
+  enabled: true
