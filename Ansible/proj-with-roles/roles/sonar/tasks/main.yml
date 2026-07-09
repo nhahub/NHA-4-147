@@ -1,12 +1,40 @@
-
 ---
-- name: Detect OS and set variables
-  ansible.builtin.include_tasks: os_vars.yaml
+- name: Fail fast on unsupported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == "Amazon"
+    fail_msg: >
+      This role only supports Amazon Linux (2 or 2023). Detected:
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+    success_msg: "Running on Amazon Linux {{ ansible_facts['distribution_major_version'] }}"
 
-- name: Install and configure PostgreSQL
-  ansible.builtin.include_tasks: postgresql.yaml
-  tags: postgresql
+- name: Set OS-specific facts (Amazon Linux 2)
+  ansible.builtin.set_fact:
+    postgresql_service_name: "postgresql-{{ postgresql_version }}"
+    postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"
+    postgresql_setup_bin: "/usr/pgsql-{{ postgresql_version }}/bin/postgresql-{{ postgresql_version }}-setup"
+    java_home: "{{ java_home_al2 }}"
+  when: ansible_facts['distribution_major_version'] == "2"
 
-- name: Install and configure SonarQube
-  ansible.builtin.include_tasks: sonarqube.yaml
-  tags: sonarqube
+- name: Set OS-specific facts (Amazon Linux 2023)
+  ansible.builtin.set_fact:
+    postgresql_service_name: "postgresql"
+    postgresql_bin_dir: "/usr/bin"
+    postgresql_setup_bin: "/usr/bin/postgresql-setup"
+    java_home: "{{ java_home_al2023 }}"
+  when: ansible_facts['distribution_major_version'] == "2023"
+
+- name: Include prerequisite / OS tuning tasks
+  ansible.builtin.include_tasks: prereqs.yml
+
+- name: Include PostgreSQL tasks
+  ansible.builtin.include_tasks: postgresql.yml
+
+- name: Include SonarQube install tasks
+  ansible.builtin.include_tasks: sonarqube_install.yml
+
+- name: Include SonarQube systemd service tasks
+  ansible.builtin.include_tasks: sonarqube_service.yml
+
+- name: Include verification / smoke test tasks
+  ansible.builtin.include_tasks: verify.yml

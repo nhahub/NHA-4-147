@@ -1,0 +1,42 @@
+---
+- name: Deploy sonarqube systemd unit
+  ansible.builtin.template:
+    src: sonarqube.service.j2
+    dest: /etc/systemd/system/sonarqube.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart sonarqube
+
+- name: Flush handlers so the unit file and DB config are live before (re)starting
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure firewalld is enabled and running
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+  when: manage_firewalld | bool
+
+- name: Open SonarQube port {{ sonarqube_port }}/tcp in firewalld
+  ansible.posix.firewalld:
+    port: "{{ sonarqube_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  when: manage_firewalld | bool
+
+- name: Enable and start SonarQube
+  ansible.builtin.systemd:
+    name: sonarqube
+    enabled: true
+    state: started
+
+- name: Wait for SonarQube web port to accept connections
+  ansible.builtin.wait_for:
+    port: "{{ sonarqube_port }}"
+    host: "127.0.0.1"
+    delay: 10
+    timeout: "{{ sonarqube_startup_timeout }}"

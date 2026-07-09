@@ -1,2 +1,62 @@
 ---
-# defaults file for Ansible/proj-with-roles/roles/sonar
+# =============================================================================
+# SonarQube
+# =============================================================================
+sonarqube_version: "10.6.0.92116"
+sonarqube_download_url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-{{ sonarqube_version }}.zip"
+sonarqube_download_dest: "/tmp/sonarqube-{{ sonarqube_version }}.zip"
+
+sonarqube_base_dir: "/opt"
+sonarqube_versioned_dir: "{{ sonarqube_base_dir }}/sonarqube-{{ sonarqube_version }}"
+sonarqube_install_dir: "{{ sonarqube_base_dir }}/sonarqube"     # stable symlink -> versioned dir
+
+sonarqube_data_dir: "{{ sonarqube_install_dir }}/data"
+sonarqube_temp_dir: "{{ sonarqube_install_dir }}/temp"
+sonarqube_logs_dir: "{{ sonarqube_install_dir }}/logs"
+sonarqube_extensions_dir: "{{ sonarqube_install_dir }}/extensions"
+
+sonarqube_user: "sonarqube"
+sonarqube_group: "sonarqube"
+sonarqube_uid: 1500
+sonarqube_gid: 1500
+
+sonarqube_port: 9000
+sonarqube_context_path: "/"
+
+# ulimits required by the embedded Elasticsearch node
+sonarqube_nofile_limit: 131072
+sonarqube_nproc_limit: 8192
+vm_max_map_count: 262144
+fs_file_max: 131072
+
+# How long (seconds) to wait for the web port to come up before failing
+sonarqube_startup_timeout: 300
+
+# =============================================================================
+# Java (SonarQube 10.x requires Java 17)
+# =============================================================================
+java_package_al2023: "java-17-amazon-corretto-devel"
+java_package_al2: "java-17-amazon-corretto-devel"
+java_home_al2023: "/usr/lib/jvm/java-17-amazon-corretto"
+java_home_al2: "/usr/lib/jvm/java-17-amazon-corretto"
+
+# =============================================================================
+# PostgreSQL
+# =============================================================================
+postgresql_version: "15"
+postgresql_service_name: "postgresql-{{ postgresql_version }}"   # overridden per-OS in vars
+postgresql_data_dir: "/var/lib/pgsql/{{ postgresql_version }}/data"
+postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"     # overridden per-OS in vars
+postgresql_port: 5432
+postgresql_listen_addresses: "localhost"
+
+sonar_db_name: "sonarqube"
+sonar_db_user: "sonarqube"
+sonar_db_password: "ChangeMe_Str0ngP@ss!"
+
+sonarqube_jdbc_url: "jdbc:postgresql://localhost:{{ postgresql_port }}/{{ sonar_db_name }}"
+
+# =============================================================================
+# Firewall
+# =============================================================================
+manage_firewalld: true

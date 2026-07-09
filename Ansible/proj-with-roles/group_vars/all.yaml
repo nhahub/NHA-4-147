@@ -1,2 +1,16 @@
 ansible_user: ec2-user
 ansible_become: true
+
+# Database credentials used by SonarQube to talk to PostgreSQL
+sonar_db_name: "sonarqube"
+sonar_db_user: "sonarqube"
+sonar_db_password: "ChangeMe_Str0ngP@ss!"   # <-- put in ansible-vault in real use
+
+# SonarQube version to install (must be a valid release from sonarsource.com)
+sonarqube_version: "10.6.0.92116"
+
+# Port SonarQube's web UI listens on
+sonarqube_port: 9000
+
+# Open the port in the OS firewall (firewalld) if it is active
+manage_firewalld: true

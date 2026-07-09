@@ -1,0 +1,113 @@
+---
+# -----------------------------------------------------------------------------
+# Base packages
+# -----------------------------------------------------------------------------
+- name: Update yum/dnf cache
+  ansible.builtin.package:
+    update_cache: true
+
+- name: Install base utilities
+  ansible.builtin.package:
+    name:
+      - unzip
+      - wget
+      - curl
+      - tar
+      - policycoreutils-python-utils
+      - firewalld
+    state: present
+
+# -----------------------------------------------------------------------------
+# Java 17 (Corretto). AL2 needs the Corretto yum repo added first;
+# AL2023 ships Corretto packages in its own repos already.
+# -----------------------------------------------------------------------------
+- name: Add Amazon Corretto repo (Amazon Linux 2 only)
+  ansible.builtin.get_url:
+    url: https://yum.corretto.aws/corretto.repo
+    dest: /etc/yum.repos.d/corretto.repo
+    mode: "0644"
+  when: ansible_facts['distribution_major_version'] == "2"
+
+- name: Install Java 17 (Amazon Corretto)
+  ansible.builtin.package:
+    name: "{{ java_package_al2 if ansible_facts['distribution_major_version'] == '2' else java_package_al2023 }}"
+    state: present
+  register: java_install
+  retries: 3
+  delay: 5
+  until: java_install is succeeded
+
+- name: Verify java_home path exists
+  ansible.builtin.stat:
+    path: "{{ java_home }}"
+  register: java_home_check
+
+- name: Fail if expected JAVA_HOME is missing
+  ansible.builtin.assert:
+    that: java_home_check.stat.exists
+    fail_msg: >
+      Expected JAVA_HOME at {{ java_home }} was not found after installing
+      {{ java_package_al2 if ansible_facts['distribution_major_version'] == '2' else java_package_al2023 }}.
+      Run `rpm -ql <package>` on the host to find the real path and update
+      java_home_al2 / java_home_al2023 in defaults/main.yml.
+
+# -----------------------------------------------------------------------------
+# Kernel parameters required by the embedded Elasticsearch node
+# -----------------------------------------------------------------------------
+- name: Configure sysctl for SonarQube (vm.max_map_count, fs.file-max)
+  ansible.builtin.template:
+    src: sysctl-sonarqube.conf.j2
+    dest: /etc/sysctl.d/99-sonarqube.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload sysctl
+
+- name: Apply sysctl settings immediately (idempotent, avoids waiting for handler)
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - { name: "vm.max_map_count", value: "{{ vm_max_map_count }}" }
+    - { name: "fs.file-max", value: "{{ fs_file_max }}" }
+
+# -----------------------------------------------------------------------------
+# ulimits for the sonarqube user (open files / processes for Elasticsearch)
+# -----------------------------------------------------------------------------
+- name: Configure ulimits for the sonarqube user
+  ansible.builtin.template:
+    src: limits-sonarqube.conf.j2
+    dest: /etc/security/limits.d/99-sonarqube.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure pam_limits is applied for non-interactive/systemd sessions
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/login
+    regexp: '^session\s+required\s+pam_limits\.so'
+    line: 'session    required     pam_limits.so'
+    state: present
+
+# -----------------------------------------------------------------------------
+# System group/user that will own and run SonarQube
+# -----------------------------------------------------------------------------
+- name: Create sonarqube group
+  ansible.builtin.group:
+    name: "{{ sonarqube_group }}"
+    gid: "{{ sonarqube_gid }}"
+    state: present
+
+- name: Create sonarqube system user
+  ansible.builtin.user:
+    name: "{{ sonarqube_user }}"
+    uid: "{{ sonarqube_uid }}"
+    group: "{{ sonarqube_group }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ sonarqube_install_dir }}"
+    create_home: false
+    state: present

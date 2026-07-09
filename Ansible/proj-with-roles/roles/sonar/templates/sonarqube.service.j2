@@ -1,16 +1,30 @@
 [Unit]
-Description=SonarQube
-After=syslog.target network.target postgresql-{{ postgresql_version }}.service
+Description=SonarQube service
+After=syslog.target network.target {{ postgresql_service_name }}.service
+Wants={{ postgresql_service_name }}.service
 
 [Service]
 Type=forking
+
 ExecStart={{ sonarqube_install_dir }}/bin/linux-x86-64/sonar.sh start
 ExecStop={{ sonarqube_install_dir }}/bin/linux-x86-64/sonar.sh stop
+ExecReload={{ sonarqube_install_dir }}/bin/linux-x86-64/sonar.sh restart
+
 User={{ sonarqube_user }}
 Group={{ sonarqube_group }}
+
+Environment=JAVA_HOME={{ java_home }}
+
 Restart=always
-LimitNOFILE=65536
-LimitNPROC=4096
+RestartSec=10
+TimeoutStartSec=5min
+TimeoutStopSec=1min
+
+LimitNOFILE={{ sonarqube_nofile_limit }}
+LimitNPROC={{ sonarqube_nproc_limit }}
+
+StandardOutput=syslog
+LimitAS=infinity
 
 [Install]
 WantedBy=multi-user.target

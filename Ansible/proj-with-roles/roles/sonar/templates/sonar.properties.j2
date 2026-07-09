@@ -1,15 +1,41 @@
-# sonar.properties — managed by Ansible
-# Do not edit manually
+#------------------------------------------------------------------------------
+# Managed by Ansible - do not edit by hand, changes will be overwritten.
+#------------------------------------------------------------------------------
 
-sonar.jdbc.username={{ sonarqube_db_user }}
-sonar.jdbc.password={{ sonarqube_db_pass }}
-sonar.jdbc.url=jdbc:postgresql://{{ sonarqube_db_host }}/{{ sonarqube_db_name }}
+#------------------------------------------------------------------------------
+# DATABASE
+#------------------------------------------------------------------------------
+sonar.jdbc.username={{ sonar_db_user }}
+sonar.jdbc.password={{ sonar_db_password }}
+sonar.jdbc.url={{ sonarqube_jdbc_url }}
 
-sonar.path.data={{ sonarqube_data_dir }}
-sonar.path.logs={{ sonarqube_install_dir }}/logs
-sonar.path.temp={{ sonarqube_install_dir }}/temp
+sonar.jdbc.maxActive=60
+sonar.jdbc.minIdle=5
 
+#------------------------------------------------------------------------------
+# WEB SERVER
+#------------------------------------------------------------------------------
 sonar.web.host=0.0.0.0
-sonar.web.port=9000
-sonar.web.javaOpts={{ sonarqube_web_jvm_opts }}
-sonar.ce.javaOpts={{ sonarqube_ce_jvm_opts }}
+sonar.web.port={{ sonarqube_port }}
+sonar.web.context={{ sonarqube_context_path }}
+sonar.web.javaOpts=-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError
+
+#------------------------------------------------------------------------------
+# COMPUTE ENGINE / ELASTICSEARCH
+#------------------------------------------------------------------------------
+sonar.ce.javaOpts=-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError
+sonar.search.javaOpts=-Xmx512m -Xms512m -XX:MaxDirectMemorySize=256m -XX:+HeapDumpOnOutOfMemoryError
+
+#------------------------------------------------------------------------------
+# PATHS
+#------------------------------------------------------------------------------
+sonar.path.data={{ sonarqube_data_dir }}
+sonar.path.temp={{ sonarqube_temp_dir }}
+sonar.path.logs={{ sonarqube_logs_dir }}
+
+#------------------------------------------------------------------------------
+# LOGGING
+#------------------------------------------------------------------------------
+sonar.log.level=INFO
+sonar.log.rollingPolicy=time:yyyy-MM-dd
+sonar.log.maxFiles=7
