@@ -1,0 +1,122 @@
+---
+#  SonarQube tasks
+
+#  Dependencies 
+- name: Install unzip and Java (OS-specific package list)
+  ansible.builtin.dnf:
+    name: "{{ ['unzip'] + java_packages }}"
+    state: present
+
+#  User and group 
+- name: Create sonarqube group
+  ansible.builtin.group:
+    name: "{{ sonarqube_group }}"
+    state: present
+
+- name: Create sonarqube system user
+  ansible.builtin.user:
+    name: "{{ sonarqube_user }}"
+    group: "{{ sonarqube_group }}"
+    home: "{{ sonarqube_install_dir }}"
+    shell: /bin/false
+    system: true
+    state: present
+
+#  Download and install 
+- name: Check if SonarQube is already installed
+  ansible.builtin.stat:
+    path: "{{ sonarqube_install_dir }}/bin/linux-x86-64/sonar.sh"
+  register: sonarqube_binary
+
+- name: Download SonarQube zip
+  ansible.builtin.get_url:
+    url: "{{ sonarqube_download_url }}"
+    dest: "/tmp/sonarqube.zip"
+    mode: '0644'
+  when: not sonarqube_binary.stat.exists
+
+- name: Extract SonarQube to /opt
+  ansible.builtin.unarchive:
+    src: "/tmp/sonarqube.zip"
+    dest: "/opt"
+    remote_src: true
+  when: not sonarqube_binary.stat.exists
+
+- name: Move extracted directory to install path
+  ansible.builtin.command:
+    cmd: "mv /opt/sonarqube-{{ sonarqube_version }} {{ sonarqube_install_dir }}"
+    creates: "{{ sonarqube_install_dir }}"
+  when: not sonarqube_binary.stat.exists
+
+#  System config 
+- name: Set vm.max_map_count for Elasticsearch
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    state: present
+    reload: true
+
+- name: Create SonarQube data directory
+  ansible.builtin.file:
+    path: "{{ sonarqube_data_dir }}"
+    state: directory
+    owner: "{{ sonarqube_user }}"
+    group: "{{ sonarqube_group }}"
+    mode: '0755'
+
+- name: Set ownership on install directory
+  ansible.builtin.file:
+    path: "{{ sonarqube_install_dir }}"
+    state: directory
+    owner: "{{ sonarqube_user }}"
+    group: "{{ sonarqube_group }}"
+    recurse: true
+
+#  Configure 
+- name: Deploy sonar.properties from template
+  ansible.builtin.template:
+    src: sonar.properties.j2
+    dest: "{{ sonarqube_install_dir }}/conf/sonar.properties"
+    owner: "{{ sonarqube_user }}"
+    group: "{{ sonarqube_group }}"
+    mode: '0640'
+  notify: restart sonarqube
+
+- name: Deploy sonarqube systemd service from template
+  ansible.builtin.template:
+    src: sonarqube.service.j2
+    dest: /etc/systemd/system/sonarqube.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart sonarqube
+
+- name: Flush handlers before starting service
+  ansible.builtin.meta: flush_handlers
+
+#  Start 
+- name: Enable and start SonarQube service
+  ansible.builtin.service:
+    name: sonarqube
+    state: started
+    enabled: true
+
+- name: Wait for SonarQube to be accessible on port 9000
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 9000
+    timeout: 180
+    delay: 10
+
+#  Summary 
+- name: Display SonarQube access information
+  ansible.builtin.debug:
+    msg:
+      - "================================================"
+      - "SonarQube is up and running!"
+      - "URL:      http://{{ ansible_facts['default_ipv4']['address'] }}:9000"
+      - "Username: admin"
+      - "Password: admin  (change on first login)"
+      - "================================================"

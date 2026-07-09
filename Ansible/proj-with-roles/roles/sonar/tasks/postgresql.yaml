@@ -1,0 +1,127 @@
+---
+#  PostgreSQL tasks
+
+#  Install repo 
+- name: Install PostgreSQL PGDG repository
+  ansible.builtin.dnf:
+    name: "{{ postgresql_repo_rpm }}"
+    state: present
+    disable_gpg_check: true
+
+# Only needed on CentOS — AL2023 doesn't use DNF modules the same way
+- name: Disable built-in postgresql module (CentOS only)
+  ansible.builtin.command:
+    cmd: dnf -qy module disable postgresql
+  changed_when: false
+  failed_when: false          # safe to ignore if module doesn't exist
+  when: disable_pg_module
+
+- name: Clean DNF cache
+  ansible.builtin.command:
+    cmd: dnf clean all
+  changed_when: false
+
+- name: Refresh DNF metadata
+  ansible.builtin.command:
+    cmd: dnf makecache
+  changed_when: false
+
+#  Install packages 
+- name: Install PostgreSQL 16 packages
+  ansible.builtin.dnf:
+    name:
+      - "postgresql{{ postgresql_version }}"
+      - "postgresql{{ postgresql_version }}-server"
+      - "postgresql{{ postgresql_version }}-contrib"
+    state: present
+
+#  Init cluster 
+- name: Check if PostgreSQL data directory is already initialized
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: pg_initialized
+
+- name: Initialize PostgreSQL database cluster
+  ansible.builtin.command:
+    cmd: "{{ postgresql_bin_dir }}/initdb -D {{ postgresql_data_dir }}"
+  become: true
+  become_user: postgres
+  when: not pg_initialized.stat.exists   # ← critical: skip on re-runs
+
+#  Configure postgresql.conf 
+- name: Allow PostgreSQL to listen on all interfaces
+  ansible.builtin.lineinfile:
+    path: "{{ postgresql_data_dir }}/postgresql.conf"
+    regexp: "^#?listen_addresses.*"
+    line: "listen_addresses = '*'"
+  notify: restart postgresql
+
+#  Configure pg_hba.conf 
+- name: Allow remote connections in pg_hba.conf
+  ansible.builtin.blockinfile:
+    path: "{{ postgresql_data_dir }}/pg_hba.conf"
+    marker: "# {mark} ANSIBLE MANAGED — remote access"
+    block: |
+      host    all             all             0.0.0.0/0               md5
+      host    all             all             ::/0                    md5
+  notify: restart postgresql
+
+#  Start service 
+- name: Enable and start PostgreSQL service
+  ansible.builtin.service:
+    name: "{{ postgresql_service }}"
+    state: started
+    enabled: true
+
+- name: Flush handlers  restart PostgreSQL before running SQL
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for PostgreSQL to be ready on port 5432
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 5432
+    timeout: 60
+
+- name: Reload PostgreSQL configuration
+  ansible.builtin.command:
+    cmd: "{{ postgresql_bin_dir }}/pg_ctl reload -D {{ postgresql_data_dir }}"
+  become: true
+  become_user: postgres
+  changed_when: false
+
+#  Create database and user 
+- name: Create SonarQube database
+  ansible.builtin.command:
+    cmd: psql -c "CREATE DATABASE {{ postgresql_db_name }};"
+  become: true
+  become_user: postgres
+  register: create_db
+  failed_when:
+    - create_db.rc != 0
+    - '"already exists" not in create_db.stderr'
+  changed_when: '"already exists" not in create_db.stderr'
+
+- name: Create SonarQube database user
+  ansible.builtin.command:
+    cmd: "psql -c \"CREATE USER {{ postgresql_db_user }} WITH ENCRYPTED PASSWORD '{{ postgresql_db_pass }}';\""
+  become: true
+  become_user: postgres
+  register: create_user
+  failed_when:
+    - create_user.rc != 0
+    - '"already exists" not in create_user.stderr'
+  changed_when: '"already exists" not in create_user.stderr'
+
+- name: Grant all privileges on database to user
+  ansible.builtin.command:
+    cmd: psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ postgresql_db_name }} TO {{ postgresql_db_user }};"
+  become: true
+  become_user: postgres
+  changed_when: false
+
+- name: Set database owner to SonarQube user
+  ansible.builtin.command:
+    cmd: psql -c "ALTER DATABASE {{ postgresql_db_name }} OWNER TO {{ postgresql_db_user }};"
+  become: true
+  become_user: postgres
+  changed_when: false
