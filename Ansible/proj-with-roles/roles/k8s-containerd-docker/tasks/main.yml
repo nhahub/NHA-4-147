@@ -3,10 +3,6 @@
 
 
 
-
-
-
-
 - name: Add Docker repository
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/centos/docker-ce.repo
