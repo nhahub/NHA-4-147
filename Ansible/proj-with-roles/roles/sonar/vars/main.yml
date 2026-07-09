@@ -1,49 +1,35 @@
 ---
 # vars file for Ansible/proj-with-roles/roles/sonar
 
+#  PostgreSQL 
 postgresql_version: "16"
-
-# Repo RPM for RHEL/CentOS 8
-postgresql_repo_rpm: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
-
-# Data directory
 postgresql_data_dir: "/var/lib/pgsql/{{ postgresql_version }}/data"
-
-# Binary path
 postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"
-
-# Service name
 postgresql_service: "postgresql-{{ postgresql_version }}"
 
-# Database and user to create for SonarQube
+# Repo RPMs  selected automatically based on detected OS
+postgresql_repo_rpm_el8: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+postgresql_repo_rpm_el9: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+
+# Database credentials
 postgresql_db_name: "sonarqube"
 postgresql_db_user: "sonr"
 postgresql_db_pass: "sonr"
 
-
-
-# SonarQube version
+#  SonarQube 
 sonarqube_version: "9.9.0.65466"
-
-# Derived download URL
 sonarqube_download_url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-{{ sonarqube_version }}.zip"
-
-# Installation directory
 sonarqube_install_dir: "/opt/sonarqube"
-
-# Data directory (logs, temp, data)
 sonarqube_data_dir: "/opt/sonarqube_data"
-
-# OS user and group
 sonarqube_user: "sonarqube"
 sonarqube_group: "sonarqube"
 
-# Database connection
-sonarqube_db_user: "sonr"
-sonarqube_db_pass: "sonr"
-sonarqube_db_name: "sonarqube"
-sonarqube_db_host: "172.31.71.94"
+# These reference postgresql vars  keep them in sync
+sonarqube_db_user: "{{ postgresql_db_user }}"
+sonarqube_db_pass: "{{ postgresql_db_pass }}"
+sonarqube_db_name: "{{ postgresql_db_name }}"
+sonarqube_db_host: "localhost"
 
-# Java heap (optional tuning)
+# JVM tuning
 sonarqube_web_jvm_opts: "-Xmx512m -Xms128m"
 sonarqube_ce_jvm_opts: "-Xmx512m -Xms128m"
