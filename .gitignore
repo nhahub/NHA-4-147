@@ -3,4 +3,5 @@ frontend/.env
 .env
 k8s/back/back-secret.yaml
 
-
+terraform-aws-infrastructure/generated/
+terraform-aws-infrastructure/terraform.tfstate
