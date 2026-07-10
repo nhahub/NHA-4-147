@@ -1,0 +1,259 @@
+podTemplate(
+    containers: [
+        containerTemplate(name: 'node',         image: 'node:18-alpine',                    command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'docker',        image: 'docker:20.10-cli',                  command: 'cat', ttyEnabled: true, privileged: true),
+        containerTemplate(name: 'sonar-scanner', image: 'sonarsource/sonar-scanner-cli:latest', command: 'sleep', args: '9999999', ttyEnabled: false),
+        containerTemplate(name: 'trivy',         image: 'aquasec/trivy:latest',              command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'kubectl',       image: 'bitnami/kubectl:latest',            command: 'cat', ttyEnabled: true)
+    ],
+    volumes: [
+        hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock')
+    ],
+    serviceAccount: 'jenkins'   // must have get/list on secrets in kube-system
+) {
+    node(POD_LABEL) {
+
+        // ==================== EDIT THESE LINES ONLY ====================
+        def DOCKER_REGISTRY = "abdulrahman011"
+        def GIT_REPO_URL    = "github.com/nhahub/NHA-4-147.git"
+        def GIT_BRANCH      = "main"
+        // ===============================================================
+
+        def IMAGE_NAME        = "${DOCKER_REGISTRY}/devops_comprehensive_project_depi_back_svc"
+        def IMAGE_TAG         = "v${env.BUILD_NUMBER}"
+        def SONAR_HOST        = "http://3.238.154.243:9000/"
+        def SONAR_KEY         = "depi-test-project"
+        def MANIFEST_PATH     = "k8s/k8s/back/back-deployment-svc.yaml"
+
+        // Sealed Secret config
+        def SECRET_NAME       = "back-secret"
+        def SECRET_NAMESPACE  = "back-proj-ns"
+        def SEALED_SECRET_OUT = "k8s/k8s/back/back-sealed-secret.yaml"
+        def BACKEND_PORT      = "30019"
+        def SEALED_NS_FLAG    = "--namespace ${SECRET_NAMESPACE}"
+
+        try {
+
+            // ─────────────────────────────────────────────
+            stage('1. Checkout Code') {
+                checkout scm
+            }
+
+            // ─────────────────────────────────────────────
+            stage('2. Get Cluster Public IP') {
+                container('kubectl') {
+                    script {
+                        // IMDSv2 — works on any EC2 instance in the cluster
+                        env.PUBLIC_IP = sh(
+                            script: '''
+                                TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+                                    -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+                                curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+                                    http://169.254.169.254/latest/meta-data/public-ipv4
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                        echo "✅ Cluster public IP: ${env.PUBLIC_IP}"
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('3. Check / Install Sealed Secrets Controller') {
+                container('kubectl') {
+                    sh '''
+                        echo "Checking Sealed Secrets controller..."
+
+                        INSTALLED=$(kubectl get deployment sealed-secrets-controller \
+                            -n kube-system --ignore-not-found 2>/dev/null)
+
+                        if [ -z "$INSTALLED" ]; then
+                            echo "⚙️  Not found — installing Sealed Secrets controller..."
+                            kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/latest/download/controller.yaml
+
+                            echo "⏳ Waiting for controller to become ready..."
+                            kubectl rollout status deployment/sealed-secrets-controller \
+                                -n kube-system --timeout=180s
+
+                            echo "✅ Sealed Secrets controller installed."
+                        else
+                            echo "✅ Sealed Secrets controller already installed — skipping."
+                        fi
+                    '''
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('4. Fetch Sealed Secrets Public Key') {
+                container('kubectl') {
+                    sh '''
+                        echo "⏳ Waiting for Sealed Secrets key to be generated..."
+
+                        for i in $(seq 1 12); do
+                            KEY_COUNT=$(kubectl get secret -n kube-system \
+                                -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
+                                --no-headers 2>/dev/null | wc -l)
+                            if [ "$KEY_COUNT" -gt "0" ]; then
+                                echo "✅ Key found."
+                                break
+                            fi
+                            echo "  Attempt $i/12 — retrying in 10s..."
+                            sleep 10
+                        done
+
+                        # Export the public cert to shared /tmp
+                        kubectl get secret -n kube-system \
+                            -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
+                            -o jsonpath="{.items[0].data.tls\\.crt}" \
+                            | base64 -d > /tmp/sealed-secrets-pub.pem
+
+                        echo "✅ Public key saved to /tmp/sealed-secrets-pub.pem"
+                    '''
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('5. Create & Encrypt SealedSecret') {
+                container('kubectl') {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'gomaa',
+                            usernameVariable: 'EMAIL_USER',
+                            passwordVariable: 'EMAIL_PASS'
+                        )
+                    ]) {
+                        sh """
+                            echo "📦 Installing kubeseal CLI..."
+                            KUBESEAL_VER=\$(curl -s https://api.github.com/repos/bitnami-labs/sealed-secrets/releases/latest \
+                                | grep '"tag_name"' | cut -d '"' -f4 | sed 's/v//')
+                            curl -sL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v\${KUBESEAL_VER}/kubeseal-\${KUBESEAL_VER}-linux-amd64.tar.gz" \
+                                | tar -xz kubeseal
+                            mv kubeseal /usr/local/bin/kubeseal
+                            chmod +x /usr/local/bin/kubeseal
+                            echo "✅ kubeseal \$(kubeseal --version) ready."
+
+                            # Build the ORIGIN value from the detected public IP
+                            ORIGIN_VAL="http://${env.PUBLIC_IP}:${BACKEND_PORT}"
+                            echo "🌐 ORIGIN will be set to: \$ORIGIN_VAL"
+
+                            # Create the raw Secret manifest (in memory only — never committed)
+                            kubectl create secret generic ${SECRET_NAME} \
+                                --namespace=${SECRET_NAMESPACE} \
+                                --from-literal=MONGO_URI="mongodb://root:example@db-ss-0.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017,db-ss-1.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017/mern_ecommerce?authSource=admin&replicaSet=rs0" \
+                                --from-literal=SECRET_KEY="mine_secret_key" \
+                                --from-literal=ORIGIN="\$ORIGIN_VAL" \
+                                --from-literal=EMAIL="\${EMAIL_USER}" \
+                                --from-literal=PASSWORD="\${EMAIL_PASS}" \
+                                --from-literal=LOGIN_TOKEN_EXPIRATION="30d" \
+                                --from-literal=OTP_EXPIRATION_TIME="120000" \
+                                --from-literal=PASSWORD_RESET_TOKEN_EXPIRATION="2m" \
+                                --from-literal=COOKIE_EXPIRATION_DAYS="30" \
+                                --from-literal=PRODUCTION="false" \
+                                --dry-run=client -o yaml > /tmp/raw-secret.yaml
+
+                            echo "🔐 Encrypting with SealedSecrets public key..."
+                            mkdir -p \$(dirname ${SEALED_SECRET_OUT})
+
+                            kubeseal \
+                                --cert /tmp/sealed-secrets-pub.pem \
+                                --format yaml \
+                                ${SEALED_NS_FLAG} \
+                                < /tmp/raw-secret.yaml > ${SEALED_SECRET_OUT}
+
+                            # Destroy the raw secret immediately
+                            rm -f /tmp/raw-secret.yaml
+                            echo "✅ SealedSecret written to ${SEALED_SECRET_OUT}"
+                        """
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('6. SonarQube Analysis') {
+                container('sonar-scanner') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        sh """
+                            sonar-scanner \
+                              -Dsonar.projectKey=${SONAR_KEY} \
+                              -Dsonar.sources=./backend \
+                              -Dsonar.host.url=${SONAR_HOST} \
+                              -Dsonar.token=\$SONAR_TOKEN
+                        """
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('7. Build Docker Image') {
+                container('docker') {
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ./backend"
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('8. Trivy Vulnerability Scan') {
+                container('trivy') {
+                    sh "trivy image --exit-code 0 --severity HIGH    ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "trivy image --exit-code 0 --severity CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('9. Push to DockerHub') {
+                container('docker') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-cred-gomaa',
+                        passwordVariable: 'PASS',
+                        usernameVariable: 'USER'
+                    )]) {
+                        sh """
+                            echo "\${PASS}" | docker login -u "\${USER}" --password-stdin
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        """
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────
+            stage('10. GitOps: Update Manifest + Push Sealed Secret') {
+                container('node') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-cred',
+                        passwordVariable: 'GPASS',
+                        usernameVariable: 'GUSER'
+                    )]) {
+                        sh """
+                            apk add --no-cache git
+
+                            git config --global --add safe.directory \$WORKSPACE
+                            git config --global user.email "jenkins@ci.local"
+                            git config --global user.name "Jenkins CI Bot"
+
+                            cd \$WORKSPACE
+
+                            # 1. Update the image tag in the backend deployment manifest
+                            sed -i -E "s|image:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|" ${MANIFEST_PATH}
+
+                            # 2. Stage everything — updated manifest + new sealed secret
+                            git add ${MANIFEST_PATH}
+                            git add ${SEALED_SECRET_OUT}
+
+                            # Commit only if there are actual changes
+                            git diff --cached --quiet \
+                                && echo "⚠️  No changes to commit." \
+                                || git commit -m "ci: image ${IMAGE_TAG} | ORIGIN=http://${env.PUBLIC_IP}:${BACKEND_PORT} | sealed secret updated [skip ci]"
+
+                            git push https://\${GUSER}:\${GPASS}@${GIT_REPO_URL} HEAD:${GIT_BRANCH}
+
+                            echo "✅ Pushed to ${GIT_REPO_URL} on branch ${GIT_BRANCH}"
+                        """
+                    }
+                }
+            }
+
+        } finally {
+            // Works whether or not Workspace Cleanup plugin is installed
+            try { cleanWs() } catch (e) { deleteDir() }
+        }
+    }
+}
