@@ -15,7 +15,7 @@ podTemplate(
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/devops_comprehensive_project_depi_front_svc"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
-        def SONAR_HOST    = "http://34.201.205.190:9000"
+        def SONAR_HOST    = "http://3.238.154.243:9000"
         def SONAR_KEY     = "depi-test-project"
         def MANIFEST_PATH = "k8s/k8s/front/front-deployment-svc.yaml"
 
