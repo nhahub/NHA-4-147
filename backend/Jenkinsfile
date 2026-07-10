@@ -94,7 +94,7 @@ podTemplate(
 
                         sed -i -E "s|image:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|" ${MANIFEST_PATH_deployment}
                         
-                        sed -i -E "s|ORIGIN:.*|ORIGIN: ${MASTER_PUBLIC_IP}|" ${MASTER_PUBLIC_IP}
+                        sed -i -E "s|ORIGIN:.*|ORIGIN: ${MASTER_PUBLIC_IP}|" ${MANIFEST_PATH_secret}
 
 
                         git add ${MANIFEST_PATH_deployment}
