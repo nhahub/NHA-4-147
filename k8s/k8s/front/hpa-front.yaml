@@ -1,0 +1,52 @@
+
+---
+# Frontend HPA
+# Targets: front-deployment in front-proj-ns
+# CPU only - memory scaling excluded:
+# minReplicas: 2 matches your deployment's replica count
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: front-hpa
+  namespace: front-proj-ns
+  labels:
+    app: ecommerce
+    tier: frontend
+  annotations:
+    description: "HPA for MERN ecommerce frontend"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: front-deployment       # must match your Deployment metadata.name exactly
+  minReplicas: 2
+  maxReplicas: 4                 # conservative max - each pod needs ~1Gi memory
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 15
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min

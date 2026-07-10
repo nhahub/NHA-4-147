@@ -1,0 +1,50 @@
+---
+# Backend HPA
+# Targets: back-deployment in back-proj-ns
+
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: back-hpa
+  namespace: back-proj-ns
+  labels:
+    app: ecommerce
+    tier: backend
+  annotations:
+    description: "HPA for MERN ecommerce backend"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: back-deployment        # must match your Deployment metadata.name exactly
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # scale up when avg CPU across pods exceeds 70%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0   # react immediately to load spikes
+      policies:
+        - type: Percent               # add up to 100% more pods at a time
+          value: 100
+          periodSeconds: 15
+        - type: Pods                  # or add up to 2 pods at a time
+          value: 2
+          periodSeconds: 15
+      selectPolicy: Max               # take whichever policy adds more pods
+    scaleDown:
+      stabilizationWindowSeconds: 300 # wait 5 min before scaling down
+      policies:
+        - type: Percent               # remove at most 50% of pods at a time
+          value: 50
+          periodSeconds: 15
+        - type: Pods                  # or remove at most 1 pod per 60s
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min               # take whichever policy removes fewer pods
