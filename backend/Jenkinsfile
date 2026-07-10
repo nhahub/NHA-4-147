@@ -19,7 +19,7 @@ podTemplate(
         def SONAR_KEY     = "depi-test-project"
         
         // Ensure this points to your actual backend deployment yaml inside the repo:
-        def MANIFEST_PATH = "k8s/back/back-deployment-svc.yaml" 
+        def MANIFEST_PATH = "k8s/k8s/back/back-deployment-svc.yaml" 
 
         try {
             stage('1. Checkout Code') { 
