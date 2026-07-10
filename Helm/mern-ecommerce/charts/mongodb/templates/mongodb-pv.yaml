@@ -13,7 +13,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
 
   hostPath:
-    path: /mnt/data/mongo-1
+    path: /mnt/helm/data/mongo-1
     type: DirectoryOrCreate
     
 ---
@@ -31,5 +31,5 @@ spec:
   persistentVolumeReclaimPolicy: Retain
 
   hostPath:
-    path: /mnt/data/mongo-2
+    path: /mnt/helm/data/mongo-2
     type: DirectoryOrCreate
