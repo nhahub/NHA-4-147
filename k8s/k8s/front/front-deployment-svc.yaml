@@ -46,7 +46,7 @@ spec:
     spec:
       containers:
       - name: front-ecommerce-container
-        image: abdulrahman011/devops_comprehensive_project_depi_front_svc
+        image: abdulrahman011/devops_comprehensive_project_depi_front_svc:v3
         ports: 
         - containerPort: 3000
 
