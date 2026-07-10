@@ -1,21 +1,21 @@
 ---
-#  PostgreSQL tasks
-
-#  Install repo 
+# 1. تثبيت مستودع PGDG الخارجي (يتم تشغيله فقط لـ CentOS ويتخطى Amazon Linux)
 - name: Install PostgreSQL PGDG repository
   ansible.builtin.dnf:
     name: "{{ postgresql_repo_rpm }}"
     state: present
     disable_gpg_check: true
+  when: postgresql_repo_rpm is defined and postgresql_repo_rpm != ""
 
-# Only needed on CentOS — AL2023 doesn't use DNF modules the same way
-- name: Disable built-in postgresql module (CentOS only)
+# 2. تعطيل الـ PostgreSQL module المدمج (مطلوب فقط في CentOS لتجنب تعارض الحزم)
+- name: Disable default PostgreSQL module (CentOS only)
   ansible.builtin.command:
-    cmd: dnf -qy module disable postgresql
-  changed_when: false
-  failed_when: false          # safe to ignore if module doesn't exist
-  when: disable_pg_module
+    cmd: dnf -y module disable postgresql
+  register: disable_module_result
+  changed_when: "'Disabling modules' in disable_module_result.stdout"
+  when: disable_pg_module | bool
 
+# 3. تنظيف وتحديث بيانات الـ DNF لضمان قراءة الحزم بشكل صحيح
 - name: Clean DNF cache
   ansible.builtin.command:
     cmd: dnf clean all
@@ -26,8 +26,14 @@
     cmd: dnf makecache
   changed_when: false
 
-#  Install packages 
-- name: Install PostgreSQL 16 packages
+# 4. تثبيت حزم الـ Java المحددة ديناميكياً بناءً على نوع النظام
+- name: Install Java packages
+  ansible.builtin.dnf:
+    name: "{{ java_packages }}"
+    state: present
+
+# 5. تثبيت حزم PostgreSQL
+- name: Install PostgreSQL packages
   ansible.builtin.dnf:
     name:
       - "postgresql{{ postgresql_version }}"
@@ -35,93 +41,53 @@
       - "postgresql{{ postgresql_version }}-contrib"
     state: present
 
-#  Init cluster 
-- name: Check if PostgreSQL data directory is already initialized
+# 6. التحقق مما إذا كانت قاعدة البيانات قد تم تهيئتها مسبقاً
+- name: Check if PostgreSQL database is initialized
   ansible.builtin.stat:
-    path: "{{ postgresql_data_dir }}/PG_VERSION"
-  register: pg_initialized
+    path: "{{ '/var/lib/pgsql/' + postgresql_version + '/data/PG_VERSION' if ansible_facts['distribution'] == 'CentOS' else '/var/lib/pgsql/data/PG_VERSION' }}"
+  register: pg_data_version
 
-- name: Initialize PostgreSQL database cluster
+# 7. تهيئة قاعدة البيانات لأول مرة
+- name: Initialize PostgreSQL database
   ansible.builtin.command:
-    cmd: "{{ postgresql_bin_dir }}/initdb -D {{ postgresql_data_dir }}"
+    cmd: "{{ '/usr/bin/postgresql' + postgresql_version + '-setup initdb' if ansible_facts['distribution'] == 'CentOS' else '/usr/bin/initdb -D /var/lib/pgsql/data' }}"
   become: true
   become_user: postgres
-  when: not pg_initialized.stat.exists   # ← critical: skip on re-runs
+  when: not pg_data_version.stat.exists
 
-#  Configure postgresql.conf 
-- name: Allow PostgreSQL to listen on all interfaces
-  ansible.builtin.lineinfile:
-    path: "{{ postgresql_data_dir }}/postgresql.conf"
-    regexp: "^#?listen_addresses.*"
-    line: "listen_addresses = '*'"
-  notify: restart postgresql
-
-#  Configure pg_hba.conf 
-- name: Allow remote connections in pg_hba.conf
-  ansible.builtin.blockinfile:
-    path: "{{ postgresql_data_dir }}/pg_hba.conf"
-    marker: "# {mark} ANSIBLE MANAGED — remote access"
-    block: |
-      host    all             all             0.0.0.0/0               md5
-      host    all             all             ::/0                    md5
-  notify: restart postgresql
-
-#  Start service 
+# 8. تفعيل وبدء خدمة PostgreSQL
 - name: Enable and start PostgreSQL service
-  ansible.builtin.service:
-    name: "{{ postgresql_service }}"
+  ansible.builtin.systemd:
+    name: "{{ 'postgresql-' + postgresql_version if ansible_facts['distribution'] == 'CentOS' else 'postgresql' }}"
     state: started
     enabled: true
 
-- name: Flush handlers  restart PostgreSQL before running SQL
+# 9. تكوين صلاحيات الاتصال المحلي (تعديل pg_hba.conf لـ md5)
+- name: Configure md5 authentication for local connections
+  ansible.builtin.lineinfile:
+    path: "{{ '/var/lib/pgsql/' + postgresql_version + '/data/pg_hba.conf' if ansible_facts['distribution'] == 'CentOS' else '/var/lib/pgsql/data/pg_hba.conf' }}"
+    regexp: '^host\s+all\s+all\s+127\.0\.0\.1/32\s+ident'
+    line: "host    all             all             127.0.0.1/32            md5"
+  notify: restart postgresql
+
+- name: Flush postgresql handlers immediately
   ansible.builtin.meta: flush_handlers
 
-- name: Wait for PostgreSQL to be ready on port 5432
-  ansible.builtin.wait_for:
-    host: localhost
-    port: 5432
-    timeout: 60
-
-- name: Reload PostgreSQL configuration
+# 10. إنشاء مستخدم وقاعدة بيانات SonarQube تلقائياً عبر SQL المباشر
+- name: Create SonarQube Database User
   ansible.builtin.command:
-    cmd: "{{ postgresql_bin_dir }}/pg_ctl reload -D {{ postgresql_data_dir }}"
+    cmd: 'psql -c "CREATE USER {{ sonarqube_db_user }} WITH PASSWORD ''{{ sonarqube_db_pass }}'';"'
   become: true
   become_user: postgres
-  changed_when: false
+  register: create_user_res
+  failed_when: false
+  changed_when: "'CREATE ROLE' in create_user_res.stdout"
 
-#  Create database and user 
-- name: Create SonarQube database
+- name: Create SonarQube Database
   ansible.builtin.command:
-    cmd: psql -c "CREATE DATABASE {{ postgresql_db_name }};"
+    cmd: 'psql -c "CREATE DATABASE {{ sonarqube_db_name }} OWNER {{ sonarqube_db_user }};"'
   become: true
   become_user: postgres
-  register: create_db
-  failed_when:
-    - create_db.rc != 0
-    - '"already exists" not in create_db.stderr'
-  changed_when: '"already exists" not in create_db.stderr'
-
-- name: Create SonarQube database user
-  ansible.builtin.command:
-    cmd: "psql -c \"CREATE USER {{ postgresql_db_user }} WITH ENCRYPTED PASSWORD '{{ postgresql_db_pass }}';\""
-  become: true
-  become_user: postgres
-  register: create_user
-  failed_when:
-    - create_user.rc != 0
-    - '"already exists" not in create_user.stderr'
-  changed_when: '"already exists" not in create_user.stderr'
-
-- name: Grant all privileges on database to user
-  ansible.builtin.command:
-    cmd: psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ postgresql_db_name }} TO {{ postgresql_db_user }};"
-  become: true
-  become_user: postgres
-  changed_when: false
-
-- name: Set database owner to SonarQube user
-  ansible.builtin.command:
-    cmd: psql -c "ALTER DATABASE {{ postgresql_db_name }} OWNER TO {{ postgresql_db_user }};"
-  become: true
-  become_user: postgres
-  changed_when: false
+  register: create_db_res
+  failed_when: false
+  changed_when: "'CREATE DATABASE' in create_db_res.stdout"

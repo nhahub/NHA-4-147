@@ -1,9 +1,7 @@
 ---
-
 - name: Add grafana Helm repo
-  kubernetes.core.helm_repository:
-    name: grafana
-    repo_url: "{{ loki_stack_repo_url }}"
+  ansible.builtin.command:
+    cmd: helm repo add grafana {{ loki_stack_repo_url }}
 
 - name: Update Helm repos
   ansible.builtin.command:
@@ -14,18 +12,15 @@
   ansible.builtin.template:
     src: loki-stack-values.yaml.j2
     dest: /tmp/loki-stack-values.yaml
-    mode: '0644'
+    mode: "0644"
 
 - name: Deploy loki-stack via Helm
-  kubernetes.core.helm:
-    name: "{{ loki_stack_release_name }}"
-    chart_ref: grafana/loki-stack
-    chart_version: "{{ loki_stack_chart_version }}"
-    release_namespace: "{{ monitoring_namespace }}"
-    create_namespace: false
-    values_files:
-      - /tmp/loki-stack-values.yaml
-    wait: false
+  ansible.builtin.command:
+    cmd: >
+      helm upgrade --install {{ loki_stack_release_name }} grafana/loki-stack
+      --version {{ loki_stack_chart_version }}
+      --namespace {{ monitoring_namespace }}
+      -f /tmp/loki-stack-values.yaml
 
 - name: Wait for Loki pods to be ready
   ansible.builtin.command:

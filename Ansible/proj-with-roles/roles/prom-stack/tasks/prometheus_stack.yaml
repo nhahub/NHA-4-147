@@ -9,9 +9,8 @@
   changed_when: ns_result.rc == 0
 
 - name: Add prometheus-community Helm repo
-  kubernetes.core.helm_repository:
-    name: prometheus-community
-    repo_url: "{{ prometheus_stack_repo_url }}"
+  ansible.builtin.command:
+    cmd: helm repo add prometheus-community {{ prometheus_stack_repo_url }}
 
 - name: Update Helm repos
   ansible.builtin.command:
@@ -22,18 +21,15 @@
   ansible.builtin.template:
     src: prometheus-stack-values.yaml.j2
     dest: /tmp/prometheus-stack-values.yaml
-    mode: '0644'
+    mode: "0644"
 
 - name: Deploy kube-prometheus-stack via Helm
-  kubernetes.core.helm:
-    name: "{{ prometheus_stack_release_name }}"
-    chart_ref: prometheus-community/kube-prometheus-stack
-    chart_version: "{{ prometheus_stack_chart_version }}"
-    release_namespace: "{{ monitoring_namespace }}"
-    create_namespace: false
-    values_files:
-      - /tmp/prometheus-stack-values.yaml
-    wait: false
+  ansible.builtin.command:
+    cmd: >
+      helm upgrade --install {{ prometheus_stack_release_name }} prometheus-community/kube-prometheus-stack
+      --version {{ prometheus_stack_chart_version }}
+      --namespace {{ monitoring_namespace }}
+      -f /tmp/prometheus-stack-values.yaml
 
 - name: Wait for Prometheus pods to be ready
   ansible.builtin.command:
@@ -49,10 +45,17 @@
   register: wait_result
   until: wait_result.rc == 0
 
+- name: Get Public IP of the control-plane node
+  ansible.builtin.uri:
+    url: https://api.ipify.org
+    return_content: true
+  register: public_ip_result
+  changed_when: false
+
 - name: Display Prometheus stack access info
   ansible.builtin.debug:
     msg:
-      - "Grafana:      http://{{ ansible_facts['default_ipv4']['address'] }}:{{ grafana_nodeport }}"
+      - "Grafana:      http://{{ public_ip_result.content }}:{{ grafana_nodeport }}"
       - "              user: {{ grafana_admin_user }} / {{ grafana_admin_password }}"
-      - "Prometheus:   http://{{ ansible_facts['default_ipv4']['address'] }}:{{ prometheus_nodeport }}"
-      - "Alertmanager: http://{{ ansible_facts['default_ipv4']['address'] }}:{{ alertmanager_nodeport }}"
+      - "Prometheus:   http://{{ public_ip_result.content }}:{{ prometheus_nodeport }}"
+      - "Alertmanager: http://{{ public_ip_result.content }}:{{ alertmanager_nodeport }}"

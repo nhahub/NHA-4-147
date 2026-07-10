@@ -2,7 +2,7 @@ podTemplate(
     containers: [
         containerTemplate(name: 'node', image: 'node:18-alpine', command: 'cat', ttyEnabled: true),
         containerTemplate(name: 'docker', image: 'docker:20.10-cli', command: 'cat', ttyEnabled: true,privileged: true),
-        containerTemplate(name: 'sonar-scanner', image: 'sonarsource/sonar-scanner-cli:latest', command: 'cat', ttyEnabled: true),
+        containerTemplate(name: 'sonar-scanner', image: 'sonarsource/sonar-scanner-cli:latest', command: 'sleep',args: '9999999', ttyEnabled: false),
         containerTemplate(name: 'trivy', image: 'aquasec/trivy:latest', command: 'cat', ttyEnabled: true)
     ],
     volumes: [ hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock') ]
@@ -15,7 +15,7 @@ podTemplate(
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/ecommerce"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
-        def SONAR_HOST    = "http://192.168.188.131:9000"
+        def SONAR_HOST    = "http://3.238.154.243:9000/"
         def SONAR_KEY     = "depi-test-project"
         
         // Ensure this points to your actual backend deployment yaml inside the repo:
@@ -26,6 +26,17 @@ podTemplate(
                 checkout scm 
             }
 
+            // ==========================================
+            // ADD THIS TEST STAGE
+            // ==========================================
+            stage('Test WebSocket / Exec') {
+                container('node') {
+                    sh 'echo "If you see this, WebSockets work and the node container is alive!"'
+                }
+            }
+            // ==========================================
+
+            
             stage('2. SonarQube Analysis') {
                 container('sonar-scanner') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {

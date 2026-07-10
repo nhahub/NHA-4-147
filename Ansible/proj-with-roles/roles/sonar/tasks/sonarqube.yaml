@@ -1,13 +1,11 @@
 ---
-#  SonarQube tasks
-
-#  Dependencies 
+# Dependencies
 - name: Install unzip and Java (OS-specific package list)
   ansible.builtin.dnf:
     name: "{{ ['unzip'] + java_packages }}"
     state: present
 
-#  User and group 
+# User and group
 - name: Create sonarqube group
   ansible.builtin.group:
     name: "{{ sonarqube_group }}"
@@ -22,33 +20,45 @@
     system: true
     state: present
 
-#  Download and install 
-- name: Check if SonarQube is already installed
+# التحقق الذكي من وجود الإعدادات
+- name: Check if SonarQube configuration directory exists
   ansible.builtin.stat:
-    path: "{{ sonarqube_install_dir }}/bin/linux-x86-64/sonar.sh"
-  register: sonarqube_binary
+    path: "{{ sonarqube_install_dir }}/conf"
+  register: sonarqube_conf_dir
 
+# تنظيف مخلفات أي محاولة قديمة معطوبة تلقائياً
+- name: Clean up incomplete previous installation attempts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "/tmp/sonarqube.zip"
+    - "/opt/sonarqube-{{ sonarqube_version }}"
+    - "{{ sonarqube_install_dir }}"
+  when: not sonarqube_conf_dir.stat.exists
+
+# التحميل والفك
 - name: Download SonarQube zip
   ansible.builtin.get_url:
     url: "{{ sonarqube_download_url }}"
     dest: "/tmp/sonarqube.zip"
-    mode: '0644'
-  when: not sonarqube_binary.stat.exists
+    mode: "0644"
+  when: not sonarqube_conf_dir.stat.exists
 
 - name: Extract SonarQube to /opt
   ansible.builtin.unarchive:
     src: "/tmp/sonarqube.zip"
     dest: "/opt"
     remote_src: true
-  when: not sonarqube_binary.stat.exists
+  when: not sonarqube_conf_dir.stat.exists
 
 - name: Move extracted directory to install path
   ansible.builtin.command:
     cmd: "mv /opt/sonarqube-{{ sonarqube_version }} {{ sonarqube_install_dir }}"
     creates: "{{ sonarqube_install_dir }}"
-  when: not sonarqube_binary.stat.exists
+  when: not sonarqube_conf_dir.stat.exists
 
-#  System config 
+# إعدادات النظام ومحرك البحث
 - name: Set vm.max_map_count for Elasticsearch
   ansible.posix.sysctl:
     name: vm.max_map_count
@@ -62,9 +72,10 @@
     state: directory
     owner: "{{ sonarqube_user }}"
     group: "{{ sonarqube_group }}"
-    mode: '0755'
+    mode: "0755"
 
-- name: Set ownership on install directory
+# تطبيق الملكية الكاملة والشاملة على كافة مجلدات السونار (بما فيها logs و temp)
+- name: Set ownership on install directory and all subfolders
   ansible.builtin.file:
     path: "{{ sonarqube_install_dir }}"
     state: directory
@@ -72,14 +83,14 @@
     group: "{{ sonarqube_group }}"
     recurse: true
 
-#  Configure 
+# نقل ملفات الإعدادات والخدمة من الـ Templates
 - name: Deploy sonar.properties from template
   ansible.builtin.template:
     src: sonar.properties.j2
     dest: "{{ sonarqube_install_dir }}/conf/sonar.properties"
     owner: "{{ sonarqube_user }}"
     group: "{{ sonarqube_group }}"
-    mode: '0640'
+    mode: "0640"
   notify: restart sonarqube
 
 - name: Deploy sonarqube systemd service from template
@@ -88,7 +99,7 @@
     dest: /etc/systemd/system/sonarqube.service
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify:
     - reload systemd
     - restart sonarqube
@@ -96,27 +107,37 @@
 - name: Flush handlers before starting service
   ansible.builtin.meta: flush_handlers
 
-#  Start 
+# فتح منفذ 9000 في جدار الحماية الداخلي للسيرفر إن وجد لتأمين الوصول الخارجي
+- name: Ensure Port 9000 is open in OS firewall
+  ansible.builtin.firewalld:
+    port: 9000/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  failed_when: false
+
+# تشغيل وإعادة تشغيل الخدمة بشكل نظيف بالمتغيرات الجديدة
 - name: Enable and start SonarQube service
   ansible.builtin.service:
     name: sonarqube
-    state: started
+    state: restarted
     enabled: true
 
-- name: Wait for SonarQube to be accessible on port 9000
+# الانتظار الذكي (5 دقائق) للتأكد من قيام الـ Web Server وربطه بالداتابيز بنجاح
+- name: Wait for SonarQube Web Server to fully bind on port 9000
   ansible.builtin.wait_for:
-    host: localhost
+    host: 0.0.0.0
     port: 9000
-    timeout: 180
-    delay: 10
+    timeout: 300
+    delay: 15
 
-#  Summary 
+# طباعة النتيجة النهائية للوصول الخارجي بالـ Public IP
 - name: Display SonarQube access information
   ansible.builtin.debug:
     msg:
       - "================================================"
-      - "SonarQube is up and running!"
-      - "URL:      http://{{ ansible_facts['default_ipv4']['address'] }}:9000"
-      - "Username: admin"
-      - "Password: admin  (change on first login)"
+      - "SonarQube is fully up and running permanently!"
+      - "Access URL: http://34.201.205.190:9000"
+      - "Username:   admin"
+      - "Password:   admin"
       - "================================================"

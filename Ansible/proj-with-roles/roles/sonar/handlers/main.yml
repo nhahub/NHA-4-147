@@ -3,16 +3,19 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: reload sysctl
-  ansible.builtin.command: sysctl --system
-  changed_when: false
-
-- name: restart postgresql
-  ansible.builtin.systemd:
-    name: "{{ postgresql_service_name }}"
-    state: restarted
-
 - name: restart sonarqube
-  ansible.builtin.systemd:
+  ansible.builtin.service:
     name: sonarqube
     state: restarted
+
+- name: restart postgresql
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+  failed_when: false
+
+- name: restart postgresql-15
+  ansible.builtin.service:
+    name: postgresql-15
+    state: restarted
+  failed_when: false

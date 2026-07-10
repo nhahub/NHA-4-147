@@ -1,6 +1,8 @@
 # kube-prometheus-stack values  managed by Ansible
 
-#  Grafana 
+# ==============================================================================
+# 1. Grafana Configuration
+# ==============================================================================
 grafana:
   enabled: true
   adminUser: "{{ grafana_admin_user }}"
@@ -14,14 +16,16 @@ grafana:
   additionalDataSources:
     - name: Loki
       type: loki
-      url: http://loki-stack.{{ monitoring_namespace }}.svc.cluster.local:3100
+      url: http://{{ prometheus_stack_release_name }}-loki.{{ monitoring_namespace }}.svc.cluster.local:3100
       access: proxy
 
   # Persist dashboards across restarts
   defaultDashboardsEnabled: true
   defaultDashboardsTimezone: utc
 
-#  Prometheus 
+# ==============================================================================
+# 2. Prometheus Configuration
+# ==============================================================================
 prometheus:
   enabled: true
 
@@ -36,7 +40,9 @@ prometheus:
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
 
-#  Alertmanager 
+# ==============================================================================
+# 3. Alertmanager Configuration
+# ==============================================================================
 alertmanager:
   enabled: true
 
@@ -44,49 +50,80 @@ alertmanager:
     type: NodePort
     nodePort: {{ alertmanager_nodeport }}
  
-
-
-#  Node Exporter  # deploys on every node automatically via DaemonSet
+# ==============================================================================
+# 4. Exporters & Core Metrics
+# ==============================================================================
 nodeExporter:
   enabled: true
   tolerations:
     - key: node-role.kubernetes.io/control-plane
       operator: Exists
       effect: NoSchedule
-    - key: node-role.kubernetes.io/master    # older k8s versions
+    - key: node-role.kubernetes.io/master
       operator: Exists
       effect: NoSchedule
 
-  # Fix for AWS — get the PRIVATE IP from the node, not 0.0.0.0
-  env:
-    - name: HOST_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.hostIP   # ← resolves to private IP e.g. 10.0.x.x
-
- livenessProbe:
-    httpGet:
-      host: 127.0.0.1     #  use localhost instead of pod IP (public IP on AWS)
-      path: /
-      port: 9100
-      scheme: HTTP
-    initialDelaySeconds: 0
-    timeoutSeconds: 1
-    periodSeconds: 10
-    failureThreshold: 3
-
-  readinessProbe:
-    httpGet:
-      host: 127.0.0.1     #  same fix
-      path: /
-      port: 9100
-      scheme: HTTP
-    initialDelaySeconds: 0
-    timeoutSeconds: 1
-    periodSeconds: 10
-    failureThreshold: 3
-
-
-#  kube-state-metrics 
 kubeStateMetrics:
   enabled: true
+
+# ==============================================================================
+# 5. Loki & Promtail Configuration
+# ==============================================================================
+loki:
+  enabled: true
+
+  service:
+    type: NodePort
+    nodePort: {{ loki_nodeport }}
+
+  config:
+    auth_enabled: false
+
+    ingester:
+      chunk_idle_period: 3m
+      chunk_block_size: 262144
+      chunk_retain_period: 1m
+
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /data/loki/boltdb-shipper-active
+        cache_location: /data/loki/boltdb-shipper-cache
+        shared_store: filesystem
+      filesystem:
+        directory: /data/loki/chunks
+
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+
+promtail:
+  enabled: true
+
+  config:
+    clients:
+      - url: http://{{ prometheus_stack_release_name }}-loki.{{ monitoring_namespace }}.svc.cluster.local:3100/loki/api/v1/push
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container

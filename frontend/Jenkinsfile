@@ -15,7 +15,7 @@ podTemplate(
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/ecommerce"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
-        def SONAR_HOST    = "http://192.168.188.131:9000"
+        def SONAR_HOST    = "http://34.201.205.190:9000"
         def SONAR_KEY     = "depi-test-project"
         def MANIFEST_PATH = "k8s/front/front-deployment-svc.yaml"
 
@@ -82,7 +82,7 @@ podTemplate(
                         git add ${MANIFEST_PATH}
                         git commit -m "ci(frontend): update image to ${IMAGE_TAG} [skip ci]" || echo "No manifest changes"
 
-                        git push https://\${GUSER}:\${GPASS}@github.com/nhahub/NHA-4-147.git HEAD:main
+                        git push https://\${GUSER}:\${GPASS}@github.com/AliAbdElnasser74/gradution_project.git HEAD:main
                         """
                     }
                 }

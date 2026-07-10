@@ -1,4 +1,8 @@
 ---
+- name: Set global repository URL variable
+  ansible.builtin.set_fact:
+    postgresql_repo_rpm_el9: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+
 - name: Assert supported OS
   ansible.builtin.assert:
     that:
@@ -7,31 +11,24 @@
       Unsupported OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}.
       Supported: CentOS Stream 9, Amazon Linux 2023.
 
-#  CentOS Stream 9 → EL9 repo 
 - name: Set PostgreSQL repo RPM for CentOS Stream 9
   ansible.builtin.set_fact:
     postgresql_repo_rpm: "{{ postgresql_repo_rpm_el9 }}"
+    postgresql_version: "16"
     java_packages:
       - java-17-openjdk
       - java-17-openjdk-devel
-    disable_pg_module: true    # CentOS has built-in pg module to disable
+    disable_pg_module: true
   when:
     - ansible_facts['distribution'] == 'CentOS'
 
-#  Amazon Linux 2023 → EL9 repo 
 - name: Set PostgreSQL repo RPM for Amazon Linux 2023
   ansible.builtin.set_fact:
-    postgresql_repo_rpm: "{{ postgresql_repo_rpm_el9 }}"
+    postgresql_repo_rpm: ""
+    postgresql_version: "15"
     java_packages:
-      - java-17-amazon-corretto          # preferred on Amazon Linux
+      - java-17-amazon-corretto
       - java-17-amazon-corretto-devel
-    disable_pg_module: false   # AL2023 doesn't use DNF modules the same way
+    disable_pg_module: false
   when:
     - ansible_facts['distribution'] == 'Amazon'
-
-- name: Show detected OS configuration
-  ansible.builtin.debug:
-    msg:
-      - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}"
-      - "PostgreSQL repo: {{ postgresql_repo_rpm }}"
-      - "Java packages: {{ java_packages }}"
