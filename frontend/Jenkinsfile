@@ -10,14 +10,14 @@ podTemplate(
     node(POD_LABEL) {
         
         // ==================== EDIT THIS LINE ONLY ====================
-        def DOCKER_REGISTRY = "meno0123" 
+        def DOCKER_REGISTRY = "abdulrahman011" 
         // =============================================================
 
-        def IMAGE_NAME    = "${DOCKER_REGISTRY}/ecommerce"
+        def IMAGE_NAME    = "${DOCKER_REGISTRY}/devops_comprehensive_project_depi_front_svc"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
         def SONAR_HOST    = "http://34.201.205.190:9000"
         def SONAR_KEY     = "depi-test-project"
-        def MANIFEST_PATH = "k8s/front/front-deployment-svc.yaml"
+        def MANIFEST_PATH = "k8s/k8s/front/front-deployment-svc.yaml"
 
         try {
             stage('1. Checkout Code') { 
@@ -53,7 +53,7 @@ podTemplate(
 
             stage('5. Push to DockerHub') {
                 container('docker') {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                    withCredentials([usernamePassword(credentialsId: 'docker-cred-gomaa', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh """
                         echo "\${PASS}" | docker login -u "\${USER}" --password-stdin
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
@@ -64,7 +64,7 @@ podTemplate(
 
             stage('6. GitOps: Update K8s Manifest') {
                container('node') {
-                    withCredentials([usernamePassword(credentialsId: 'github-creds',
+                    withCredentials([usernamePassword(credentialsId: 'github-cred',
                                                     passwordVariable: 'GPASS',
                                                     usernameVariable: 'GUSER')]) {
                         sh """
