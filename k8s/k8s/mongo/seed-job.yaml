@@ -1,0 +1,106 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-seed
+  namespace: back-proj-ns
+  labels:
+    app: ecommerce
+    tier: backend
+spec:
+  # Job will not restart on success, retries up to 3 times on failure
+  backoffLimit: 3
+  # Auto-cleanup: Job + pod deleted 120s after completion (success or failure)
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      # ----------------------------------------------------------------
+      # wait-for-mongodb: waits for a PRIMARY to exist before seeding.
+      # Seeding against a replica set with no primary would fail silently
+      # or with a write error.
+      # ----------------------------------------------------------------
+      initContainers:
+      - name: wait-for-mongodb
+        image: mongo:7
+        command:
+          - /bin/sh
+          - -c
+          - |
+            MONGO_HOST="db-ss-0.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017"
+            echo "Waiting for MongoDB primary..."
+            until mongosh "$MONGO_HOST" \
+              -u root \
+              -p example \
+              --authenticationDatabase admin \
+              --quiet \
+              --eval 'db.runCommand({isMaster:1}).ismaster' 2>/dev/null | grep -q "true"; do
+              echo "No primary yet, retrying in 5s..."
+              sleep 5
+            done
+            echo "MongoDB primary is ready."
+
+      containers:
+      - name: db-seed
+        # Reuse the backend image - seed.js is already baked in
+        image: abdulrahman011/devops_comprehensive_project_depi_back_svc
+        command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Starting database seeding..."
+            cd /app && npm run seed
+            echo "Seeding complete."
+
+        # Same env vars the backend uses - seed.js reads MONGO_URI to connect
+        env:
+          - name: MONGO_URI
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: MONGO_URI
+          - name: SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: SECRET_KEY
+          - name: ORIGIN
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: ORIGIN
+          - name: EMAIL
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: EMAIL
+          - name: PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: PASSWORD
+          - name: LOGIN_TOKEN_EXPIRATION
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: LOGIN_TOKEN_EXPIRATION
+          - name: OTP_EXPIRATION_TIME
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: OTP_EXPIRATION_TIME
+          - name: PASSWORD_RESET_TOKEN_EXPIRATION
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: PASSWORD_RESET_TOKEN_EXPIRATION
+          - name: COOKIE_EXPIRATION_DAYS
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: COOKIE_EXPIRATION_DAYS
+          - name: PRODUCTION
+            valueFrom:
+              secretKeyRef:
+                name: back-secret
+                key: PRODUCTION
