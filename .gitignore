@@ -1,7 +1,8 @@
 backend/.env
 frontend/.env
 .env
-k8s/back/back-secret.yaml
+k8s/k8s/back/back-secret.yaml
+k8s/k8s/mongo/mongodb-secrets.yaml
 
 terraform-aws-infrastructure/generated/
 terraform-aws-infrastructure/terraform.tfstate
