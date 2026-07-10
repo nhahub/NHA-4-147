@@ -46,14 +46,14 @@ spec:
     spec:
       containers:
       - name: front-ecommerce-container
-        image: abdulrahman011/devops_comprehensive_project_depi_front_svc:v3
+        image: abdulrahman011/devops_comprehensive_project_depi_front_svc:v5
         ports: 
         - containerPort: 3000
 
         env:
             - name: REACT_APP_BASE_URL
-              value: "http://192.168.163.136:30012"
-              # value: "http://back-svc.back-proj-ns.svc.cluster.local:30012"
+              value: http://32.196.165.62:30012
+              # value: http://32.196.165.62:30012
 
 
 
