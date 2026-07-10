@@ -82,7 +82,7 @@ podTemplate(
                         git add ${MANIFEST_PATH}
                         git commit -m "ci(frontend): update image to ${IMAGE_TAG} [skip ci]" || echo "No manifest changes"
 
-                        git push https://\${GUSER}:\${GPASS}@github.com/AliAbdElnasser74/gradution_project.git HEAD:main
+                        git push https://\${GUSER}:\${GPASS}@github.com/nhahub/NHA-4-147.git HEAD:main
                         """
                     }
                 }
