@@ -31,31 +31,12 @@ podTemplate(
         def SEALED_SECRET_OUT = "k8s/k8s/back/back-sealed-secret.yaml"
         def BACKEND_PORT      = "30019"
         def SEALED_NS_FLAG    = "--namespace ${SECRET_NAMESPACE}"
-
+        def PUBLIC_IP = "32.196.165.62"
         try {
 
             // ─────────────────────────────────────────────
             stage('1. Checkout Code') {
                 checkout scm
-            }
-
-            // ─────────────────────────────────────────────
-            stage('2. Get Cluster Public IP') {
-                container('kubectl') {
-                    script {
-                        // IMDSv2 — works on any EC2 instance in the cluster
-                        env.PUBLIC_IP = sh(
-                            script: '''
-                                TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
-                                    -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-                                curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-                                    http://169.254.169.254/latest/meta-data/public-ipv4
-                            ''',
-                            returnStdout: true
-                        ).trim()
-                        echo "✅ Cluster public IP: ${env.PUBLIC_IP}"
-                    }
-                }
             }
 
             // ─────────────────────────────────────────────
