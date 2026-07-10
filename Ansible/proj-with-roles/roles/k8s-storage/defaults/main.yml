@@ -1,0 +1,5 @@
+---
+# defaults file for roles/k8s-storage
+local_path_provisioner_version: "master"
+local_path_namespace: "local-path-storage"
+local_path_storage_class: "local-path"

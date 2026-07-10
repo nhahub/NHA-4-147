@@ -1,0 +1,176 @@
+# jenkins-values.yaml — managed by Ansible (jenkins_k8s role)
+# =============================================================
+
+controller:
+
+  #  Admin credentials 
+  admin: 
+    username: "{{ jenkins_admin_user }}"
+    password: "{{ jenkins_admin_password }}"
+
+  #  Service — NodePort for external access 
+  serviceType: NodePort
+  nodePort: {{ jenkins_nodeport }}
+
+  #  JVM options 
+  javaOpts: "{{ jenkins_java_opts }}"
+
+  #  Resources 
+  resources:
+    requests:
+      cpu: "{{ jenkins_requests_cpu }}"
+      memory: "{{ jenkins_requests_memory }}"
+    limits:
+      cpu: "{{ jenkins_limits_cpu }}"
+      memory: "{{ jenkins_limits_memory }}"
+
+  #  Probes 
+  # Jenkins pod uses cluster networking (not hostNetwork) so
+  # probes use the pod ClusterIP — works on both VMs and AWS.
+  # No 127.0.0.1 override needed here (unlike node-exporter).
+  startupProbe:
+    httpGet:
+      path: /login
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 30       # gives Jenkins 5 minutes to start
+
+  livenessProbe:
+    httpGet:
+      path: /login
+      port: 8080
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  readinessProbe:
+    httpGet:
+      path: /login
+      port: 8080
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  #  Plugins 
+  # additionalPlugins are installed on top of the default set
+  additionalPlugins:
+{% for plugin in jenkins_extra_plugins %}
+    - {{ plugin }}
+{% endfor %}
+
+  #  Init scripts 
+  initializeOnce: true         # don't re-run init on every pod restart
+
+  #  CSRF 
+  csrf:
+    defaultCrumbIssuer:
+      enabled: true
+      proxyCompatability: true  # needed when behind NodePort/proxy
+
+  #  Persistence 
+  persistence:
+    enabled: {{ jenkins_persistence_enabled | lower }}
+    size: "{{ jenkins_persistence_size }}"
+    storageClass: local-path
+    accessMode: ReadWriteOnce
+
+  JCasC:
+
+    enabled: true
+
+    defaultConfig: false
+
+    configScripts:
+
+      kubernetes: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                name: "{{ jenkins_cloud_name }}"
+                serverUrl: "https://kubernetes.default.svc"
+                namespace: "{{ jenkins_cloud_namespace }}"
+
+                jenkinsUrl: "http://jenkins:8080"
+
+                jenkinsTunnel: "jenkins-agent:50000"
+
+                containerCapStr: "{{ jenkins_cloud_container_cap }}"
+
+                podLabels:
+                  - key: jenkins
+                    value: agent
+
+                templates:
+
+                  - name: "default"
+
+                    label: "kubernetes"
+
+                    namespace: "{{ jenkins_cloud_namespace }}"
+
+                    serviceAccount: "jenkins"
+
+                    nodeUsageMode: NORMAL
+
+                    containers:
+
+                      - name: jnlp
+                        image: jenkins/inbound-agent:latest-jdk17
+                        alwaysPullImage: false
+                        workingDir: /home/jenkins/agent
+
+
+      credentials: |
+              credentials:
+
+                system:
+
+                  domainCredentials:
+
+                    - credentials:
+
+                        - usernamePassword:
+
+                            id: dockerhub-creds
+
+                            username: "{{ dockerhub_username }}"
+
+                            password: "{{ dockerhub_password }}"
+
+                            description: DockerHub
+
+                        - usernamePassword:
+
+                            id: github-creds
+
+                            username: "{{ github_username }}"
+
+                            password: "{{ github_password }}"
+
+                            description: GitHub
+
+                        - string:
+
+                            id: sonar-token
+
+                            secret: "{{ sonar_token }}"
+
+                            description: Sonar Token
+
+
+
+
+
+
+#  Service account 
+serviceAccount:
+  create: true
+  name: jenkins
+
+#  RBAC (needed for kubernetes plugin) 
+rbac:
+  create: true
+  readSecrets: true

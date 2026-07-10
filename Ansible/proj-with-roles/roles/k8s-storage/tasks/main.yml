@@ -1,0 +1,48 @@
+# tasks file for roles/k8s-storage
+---
+- name: Check if local-path StorageClass exists
+  command: kubectl get storageclass {{ local_path_storage_class }}
+  register: storageclass_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Local Path Provisioner
+  command: >
+    kubectl apply -f
+    https://raw.githubusercontent.com/rancher/local-path-provisioner/{{ local_path_provisioner_version }}/deploy/local-path-storage.yaml
+  when: storageclass_check.rc != 0
+
+- name: Wait for Local Path Provisioner deployment
+  command: >
+    kubectl rollout status deployment/local-path-provisioner
+    -n {{ local_path_namespace }}
+    --timeout=180s
+  when: storageclass_check.rc != 0
+
+- name: Get current default StorageClasses
+  command: kubectl get storageclass -o json
+  register: storageclasses
+  changed_when: false
+
+- name: Remove default annotation from existing default StorageClasses
+  shell: |
+    kubectl get storageclass -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' \
+    | awk '$2=="true"{print $1}' \
+    | while read sc; do
+        kubectl annotate storageclass "$sc" storageclass.kubernetes.io/is-default-class- --overwrite
+      done
+  changed_when: false
+
+- name: Make local-path the default StorageClass
+  command: >
+    kubectl annotate storageclass {{ local_path_storage_class }}
+    storageclass.kubernetes.io/is-default-class=true
+    --overwrite
+
+- name: Wait until StorageClass is available
+  command: kubectl get storageclass {{ local_path_storage_class }}
+  register: sc_ready
+  retries: 10
+  delay: 5
+  until: sc_ready.rc == 0
+  changed_when: false

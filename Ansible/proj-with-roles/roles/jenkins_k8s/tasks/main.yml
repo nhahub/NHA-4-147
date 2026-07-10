@@ -1,0 +1,100 @@
+---
+
+
+#  Namespace 
+- name: Create Jenkins namespace
+  ansible.builtin.command:
+    cmd: kubectl create namespace {{ jenkins_namespace }}
+  register: ns_result
+  failed_when:
+    - ns_result.rc != 0
+    - '"already exists" not in ns_result.stderr'
+  changed_when: ns_result.rc == 0
+
+#  Helm repo 
+- name: Add Jenkins Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ jenkins_chart_repo_name }}"
+    repo_url: "{{ jenkins_chart_repo_url }}"
+    binary_path: "{{ helm_binary_path }}"
+
+- name: Update Helm repositories
+  ansible.builtin.command:
+    cmd: "{{ helm_binary_path }} repo update"
+  changed_when: false
+
+#  Values file 
+- name: Render Jenkins values from template
+  ansible.builtin.template:
+    src: jenkins-values.yaml.j2
+    dest: /tmp/jenkins-values.yaml
+    mode: '0644'
+
+#  Deploy 
+- name: Check if Jenkins is already deployed
+  ansible.builtin.command:
+    cmd: "{{ helm_binary_path }} status {{ jenkins_release_name }} -n {{ jenkins_namespace }}"
+  register: jenkins_status
+  failed_when: false
+  changed_when: false
+
+- name: Deploy Jenkins via Helm
+  kubernetes.core.helm:
+    name: "{{ jenkins_release_name }}"
+    chart_ref: "{{ jenkins_chart_name }}"
+    chart_version: "{{ jenkins_chart_version }}"
+    release_namespace: "{{ jenkins_namespace }}"
+    create_namespace: false
+    values_files:
+      - /tmp/jenkins-values.yaml
+    binary_path: "{{ helm_binary_path }}"
+    wait: false                 # we use kubectl wait below for better control
+
+    
+- name: Wait for Jenkins pod to appear
+  ansible.builtin.shell:
+    cmd: >
+      kubectl get pods -n {{ jenkins_namespace }}
+      -l app.kubernetes.io/component=jenkins-controller
+      --no-headers | wc -l
+  register: pod_count
+  retries: 20
+  delay: 15
+  until: pod_count.stdout | int > 0
+  changed_when: false
+
+- name: Wait for Jenkins pod to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait pod
+      --for=condition=Ready
+      -l app.kubernetes.io/component=jenkins-controller
+      -n {{ jenkins_namespace }}
+      --timeout=1000s
+  changed_when: false
+
+#  Get node IP for access info 
+- name: Get node private IP (for VM) or internal IP (for AWS)
+  ansible.builtin.shell:
+    cmd: >
+      kubectl get nodes
+      -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}'
+  register: node_ip
+  changed_when: false
+
+#  Display access info 
+- name: Display Jenkins access information
+  ansible.builtin.debug:
+    msg:
+      - "================================================"
+      - "Jenkins is ready!"
+      - ""
+      - "Local VMs:  http://{{ node_ip.stdout }}:{{ jenkins_nodeport }}"
+      - "AWS:        http://<public-ip>:{{ jenkins_nodeport }}"
+      - "            (open port {{ jenkins_nodeport }} in your security group)"
+      - ""
+      - "Username: {{ jenkins_admin_user }}"
+      - "Password: {{ jenkins_admin_password }}"
+      - ""
+      - "First login takes 2-3 minutes while plugins install."
+      - "================================================"

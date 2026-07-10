@@ -94,3 +94,27 @@
   become: true
   roles:
     - sonar
+
+
+# play 9: SETup Storage class 
+- name: play 8 - SETup storage class  
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - k8s-storage
+
+- name: Deploy Jenkins on Kubernetes
+  hosts: k8s_control_plane
+  become: true
+  environment:
+    PATH: "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  pre_tasks:
+    - name: Install Python dependencies for kubernetes.core
+      ansible.builtin.pip:
+        name:
+          - pyyaml
+          - kubernetes
+        state: present
+        executable: pip3
+  roles:
+    - jenkins_k8s

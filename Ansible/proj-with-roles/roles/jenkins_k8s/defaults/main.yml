@@ -1,0 +1,66 @@
+---
+# =============================================================
+#  Role: jenkins_k8s
+#  Deploys Jenkins on Kubernetes via Helm
+#  Works on: local VMs (NodePort) and AWS EC2 (NodePort via private IP)
+# =============================================================
+
+#  Helm 
+helm_binary_path: /usr/local/bin/helm      # helm is in /usr/local/bin, not in sudo PATH
+
+#  Chart 
+jenkins_chart_repo_name: jenkins
+jenkins_chart_repo_url: https://charts.jenkins.io
+jenkins_chart_name: jenkins/jenkins
+jenkins_chart_version: "5.9.33"
+
+#  Release 
+jenkins_release_name: jenkins
+jenkins_namespace: jenkins
+
+#  Access 
+# NodePort — reachable on any node IP at this port
+# Local VMs:  http://<vm-ip>:30088
+# AWS:        http://<private-ip>:30088  (or public IP if SG allows 30088)
+
+jenkins_nodeport: 30088
+
+#  Credentials 
+jenkins_admin_user: admin
+jenkins_admin_password: "admin123"
+
+#  Resources 
+jenkins_requests_cpu: "200m"
+jenkins_requests_memory: "512Mi"
+jenkins_limits_cpu: "1000m"
+jenkins_limits_memory: "2Gi"
+
+#  JVM 
+jenkins_java_opts: "-Xmx1024m -Xms512m -XX:+UseG1GC"
+
+#  Persistence 
+jenkins_persistence_enabled: true
+jenkins_persistence_size: "8Gi"
+
+#  Pre-installed plugins 
+# These are installed on top of the default recommended plugins
+jenkins_extra_plugins:
+  - docker-workflow
+  - sonar
+# JCasC
+jenkins_jcasc_enabled: true
+
+# Kubernetes Cloud
+jenkins_cloud_name: kubernetes
+jenkins_cloud_namespace: jenkins
+jenkins_cloud_container_cap: 20
+
+# Credentials
+
+dockerhub_username: new
+dockerhub_password: new
+
+github_username: new 
+github_password: new
+
+sonar_token: hh
