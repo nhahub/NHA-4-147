@@ -44,11 +44,41 @@ spec:
         type: back-end
 
     spec:
+      initContainers:
+      - name: wait-for-mongodb
+        image: mongo:7
+      
+        command:
+            - /bin/sh
+            - -c
+            - |
+              MONGO_HOST="db-ss-0.mongo-svc-headless.mongodb-proj-ns.svc.cluster.local:27017"
+
+              echo "Waiting for MongoDB primary..."
+              until mongosh "$MONGO_HOST" \
+                -u root \
+                -p example \
+                --authenticationDatabase admin \
+                --quiet \
+                --eval 'db.runCommand({isMaster:1}).ismaster' 2>/dev/null | grep -q "true"; do
+                echo "No primary yet, retrying in 5s..."
+                sleep 5
+              done
+              echo "MongoDB primary is ready."
+
       containers:
       - name: back-ecommerce-container
         image: abdulrahman011/devops_comprehensive_project_depi_back_svc:v23
         ports: 
         - containerPort: 8000
+        
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
 
         env:
             - name: MONGO_URI
