@@ -77,7 +77,7 @@ podTemplate(
 
             stage('6. GitOps: Update K8s Manifest') {
                container('node') {
-                    withCredentials([usernamePassword(credentialsId: 'github-creds',
+                    withCredentials([usernamePassword(credentialsId: 'github-cred',
                                                     passwordVariable: 'GPASS',
                                                     usernameVariable: 'GUSER')]) {
                         sh """
