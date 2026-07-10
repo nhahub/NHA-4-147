@@ -46,7 +46,7 @@ spec:
     spec:
       containers:
       - name: back-ecommerce-container
-        image: abdulrahman011/devops_comprehensive_project_depi_back_svc:v22
+        image: abdulrahman011/devops_comprehensive_project_depi_back_svc:v23
         ports: 
         - containerPort: 8000
 
