@@ -79,7 +79,7 @@ podTemplate(
                         cd \$WORKSPACE
 
                         sed -i -E "s|image:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|" ${MANIFEST_PATH}
-                        sed -i -E "s|value:.*|value: "http://${MASTER_PUBLIC_IP}:30012|"  ${MANIFEST_PATH}
+                        sed -i -E "s|value:.*|value: \"http://${MASTER_PUBLIC_IP}:30012\"|" ${MANIFEST_PATH}
 
                         git add ${MANIFEST_PATH}
                         git commit -m "ci(frontend): update image to ${IMAGE_TAG} [skip ci]" || echo "No manifest changes"
