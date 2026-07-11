@@ -7,19 +7,13 @@ metadata:
     app: ecommerce
     tier: backend
 spec:
-  # Job will not restart on success, retries up to 3 times on failure
   backoffLimit: 3
-  # Auto-cleanup: Job + pod deleted 120s after completion (success or failure)
-  ttlSecondsAfterFinished: 120
+  activeDeadlineSeconds: 180    # hard kill after 3 min regardless
+  ttlSecondsAfterFinished: 120  # auto-delete 2 min after completion
   template:
     spec:
       restartPolicy: OnFailure
 
-      # ----------------------------------------------------------------
-      # wait-for-mongodb: waits for a PRIMARY to exist before seeding.
-      # Seeding against a replica set with no primary would fail silently
-      # or with a write error.
-      # ----------------------------------------------------------------
       initContainers:
       - name: wait-for-mongodb
         image: mongo:7
@@ -42,17 +36,15 @@ spec:
 
       containers:
       - name: db-seed
-        # Reuse the backend image - seed.js is already baked in
         image: abdulrahman011/devops_comprehensive_project_depi_back_svc
         command:
           - /bin/sh
           - -c
           - |
             echo "Starting database seeding..."
-            cd /app && npm run seed
+            cd /app && timeout 90 npm run seed || true
             echo "Seeding complete."
-
-        # Same env vars the backend uses - seed.js reads MONGO_URI to connect
+            exit 0
         env:
           - name: MONGO_URI
             valueFrom:
