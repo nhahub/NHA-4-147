@@ -63,7 +63,7 @@
       ansible.builtin.yum:
         name:
           - python3-pip
-          - python3-yaml        # ← fixes "No module named yaml"
+          - python3-yaml        #  fixes "No module named yaml"
         state: present
 
     - name: Install PyYAML via pip (if yum package not available)
