@@ -9,9 +9,7 @@ podTemplate(
 ) {
     node(POD_LABEL) {
         
-        // ==================== EDIT THIS LINE ONLY ====================
         def DOCKER_REGISTRY = "abdulrahman011" 
-        // =============================================================
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/devops_comprehensive_project_depi_back_svc"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
@@ -28,15 +26,11 @@ podTemplate(
                 checkout scm 
             }
 
-            // ==========================================
-            // ADD THIS TEST STAGE
-            // ==========================================
             stage('Test WebSocket / Exec') {
                 container('node') {
                     sh 'echo "If you see this, WebSockets work and the node container is alive!"'
                 }
             }
-            // ==========================================
 
             
             stage('2. SonarQube Analysis') {
