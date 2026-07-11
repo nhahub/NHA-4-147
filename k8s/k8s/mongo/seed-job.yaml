@@ -6,10 +6,16 @@ metadata:
   labels:
     app: ecommerce
     tier: backend
+  annotations:
+    # ArgoCD hook: runs once after a successful sync, not tracked as a sync resource
+    argocd.argoproj.io/hook: PostSync
+    # Delete the Job after it succeeds - prevents re-run on next reconciliation loop
+    # Change to BeforeHookCreation if you want it to only run when manually triggered
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 180    # hard kill after 3 min regardless
-  ttlSecondsAfterFinished: 120  # auto-delete 2 min after completion
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: 120
   template:
     spec:
       restartPolicy: OnFailure
