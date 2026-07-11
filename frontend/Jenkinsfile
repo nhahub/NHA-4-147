@@ -9,9 +9,7 @@ podTemplate(
 ) {
     node(POD_LABEL) {
         
-        // ==================== EDIT THIS LINE ONLY ====================
         def DOCKER_REGISTRY = "abdulrahman011" 
-        // =============================================================
 
         def IMAGE_NAME    = "${DOCKER_REGISTRY}/devops_comprehensive_project_depi_front_svc"
         def IMAGE_TAG     = "v${env.BUILD_NUMBER}"
