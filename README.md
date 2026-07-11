@@ -188,6 +188,4 @@ This runs the backend (`:8000`), frontend (`:3000`), and a local MongoDB instanc
 
 Secrets committed to this repository (e.g. database credentials) are sealed with **Sealed Secrets** using the public certificate at `k8s/sealed-secrets.pem`, so only the controller running in the target cluster can decrypt them.
 
-## Maintainer
 
-Abdulrahman Gomaa Hassan — abdulrahman.gomaa.h05@gmail.com
